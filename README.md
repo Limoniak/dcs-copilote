@@ -37,6 +37,8 @@ Overlay semi-transparent toujours au premier plan (Qt / PySide6) : appareil, ré
 
 Sans manuel, l'IA répond de mémoire et peut inventer des noms d'interrupteurs. Dans **⚙ Réglages → Manuels**, indexe les PDF officiels de tes modules (`DCS World/Mods/aircraft/*/Doc/`) et, si tu veux, un dossier perso (Chuck's Guides…). À chaque question, les passages les plus utiles **du manuel de l'appareil piloté** sont donnés à l'IA, et les sources (document, page) s'affichent sous la réponse.
 
+**Chuck's Guides** (chucksguides.com) : active « Mise à jour automatique » dans la même page. Les guides de tes modules installés (et ceux que tu coches) sont téléchargés dans `data/chucks/`, puis vérifiés chaque semaine : un guide n'est retéléchargé que s'il a changé (ETag), et seul ce guide est réanalysé. L'analyse attend que tu ne sois plus en vol pour ne pas faire chuter les FPS. Compte 15 à 150 Mo par guide.
+
 La recherche est sémantique et multilingue : une question en français trouve le bon passage du manuel anglais (modèle local `paraphrase-multilingual-MiniLM-L12-v2`, ~220 Mo, téléchargé au premier usage), complétée par une recherche par mots-clés pour les termes exacts du cockpit. Tout reste local ; l'index est dans `data/manuals/`.
 
 ## Réglages — bouton ⚙ de l'overlay

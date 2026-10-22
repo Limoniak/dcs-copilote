@@ -61,6 +61,7 @@ dcs-copilote/
     ├── dcs_install.py      Détection de Saved Games/DCS, installation du script + ligne Export.lua
     ├── prompts.py          Prompt système : base + mode vol (longueur réglable, phrases ≤ 15 mots) / sol + consignes perso
     ├── manuals.py          Manuels PDF : indexation (PyMuPDF + embeddings multilingues fastembed) et recherche hybride
+    ├── chucks.py           Chuck's Guides : liste du site, ETag, téléchargement des guides nouveaux/modifiés
     ├── logfile.py          Journal logs/dcs-copilote.log (horodaté) + capture des exceptions
     ├── textutil.py         Découpage en phrases + nettoyage pour la voix (kt → nœuds…)
     └── aircraft.py         Noms internes DCS → noms lisibles + liste du menu
@@ -76,6 +77,7 @@ dcs-copilote/
 | Speaker._player | Lecture audio des phrases synthétisées |
 | DCSLink | Réception UDP |
 | PTT | Listener pynput ou boucle d'événements pygame |
+| _chucks_loop | Vérifie les Chuck's Guides au démarrage puis toutes les 6 h (chaque guide ≤ 1×/semaine) ; réindexation différée hors vol |
 | _load_stt | Chargement de Whisper au démarrage (non bloquant) |
 
 **Annulation** : un compteur `App.gen` est incrémenté à chaque appui PTT, question tapée ou reset. Toute tâche (stream LLM, phrase à lire) porteuse d'un ancien `gen` est abandonnée.
@@ -128,7 +130,7 @@ python main.py --download-voice fr_FR-siwis-medium
 
 ## Pistes d'évolution
 
-- Manuels : relancer l'indexation automatiquement quand un module est ajouté ou mis à jour.
+- Manuels officiels : réindexer automatiquement après une mise à jour de DCS (les Chuck's Guides le sont déjà).
 - Armement sélectionné dans les données Lua (dépend du module).
 - Mode checklist : l'assistant déroule une procédure étape par étape, « suivant » au PTT.
 - Packaging : exécutable Windows avec PyInstaller.

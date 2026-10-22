@@ -62,6 +62,8 @@ class App:
         from .manuals import Manuals
         self.manuals = Manuals(self.log)
         threading.Thread(target=self.load_manuals, daemon=True).start()
+        self._chucks_lock = threading.Lock()
+        threading.Thread(target=self._chucks_loop, daemon=True).start()
         threading.Thread(target=self._load_stt, daemon=True).start()
         threading.Thread(target=self._worker, daemon=True).start()
 
@@ -206,6 +208,54 @@ class App:
                 print(f"Manuels : {s['docs']} documents, {s['chunks']} extraits", flush=True)
         except Exception as e:  # noqa: BLE001
             self.log(f"Manuels indisponibles : {e}", error=True)
+
+    # ------------------------------------------------------------------ Chuck's Guides
+    def chucks_selection(self, cfg=None):
+        from . import chucks
+        m = (cfg or self.cfg)["manuals"]
+        ch = m.get("chucks", {})
+        slugs = list(ch.get("aircraft", []))
+        if ch.get("follow_installed", True) and m.get("dcs_dir"):
+            guides = chucks.load_state()["guides"] or chucks.list_guides()
+            slugs += [s for s in chucks.installed_slugs(guides, m["dcs_dir"]) if s not in slugs]
+        return slugs
+
+    def _chucks_loop(self):
+        """Vérifie au démarrage puis toutes les 6 h (chaque guide au plus une fois par semaine)."""
+        from . import chucks
+        time.sleep(20)                         # laisser l'appli démarrer tranquillement
+        while True:
+            try:
+                if self.cfg["manuals"].get("chucks", {}).get("enabled") and chucks.due(chucks.load_state()):
+                    self.update_chucks(background=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"[chucks] {e}", flush=True)
+            time.sleep(6 * 3600)
+
+    def update_chucks(self, progress=lambda msg, frac=None: None, background=False, cfg=None):
+        """Télécharge les guides nouveaux ou modifiés puis réindexe. En arrière-plan, l'analyse
+        (gourmande en CPU) attend que le pilote ne soit plus en vol pour ne pas faire chuter les FPS."""
+        from . import chucks
+        from .manuals import build_index, find_pdfs
+        if not self._chucks_lock.acquire(blocking=False):
+            raise RuntimeError("mise à jour déjà en cours")
+        try:
+            cfg = cfg or self.cfg
+            updated, errors = chucks.update(self.chucks_selection(cfg), progress)
+            for e in errors:
+                print(f"[chucks] {e}", flush=True)
+            if updated or not background:
+                while background and self.dcs.snapshot() is not None:
+                    time.sleep(30)
+                m = cfg["manuals"]
+                build_index(find_pdfs(m.get("dcs_dir"), m.get("extra_dir")),
+                            lambda d, n, msg: progress(msg, d / max(1, n)), threads=2 if background else None)
+                self.load_manuals()
+            if updated and background:
+                self.overlay.info("Chuck's Guides mis à jour : " + ", ".join(updated))
+            return updated, errors
+        finally:
+            self._chucks_lock.release()
 
     def _manual_context(self, question):
         """Passages des manuels pour la question (+ la précédente si c'est une relance courte)."""

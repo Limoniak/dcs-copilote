@@ -8,7 +8,7 @@ import threading
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
-                               QLabel, QLineEdit, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox,
+                               QLabel, QLineEdit, QListWidget, QListWidgetItem, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox,
                                QStackedWidget, QToolButton, QVBoxLayout, QWidget)
 
 from . import ui_kit as ui
@@ -557,6 +557,8 @@ class SettingsWindow(QWidget):
         _show(self.index_result, self._summary_text(s) if s else "Aucun manuel indexé pour l'instant.")
         lay.addWidget(card)
 
+        lay.addWidget(self._chucks_card())
+
         test = Card("Tester la recherche", "Ce que l'IA recevrait pour cette question, avec l'appareil actuel.")
         trow = QHBoxLayout()
         self.e_query = QLineEdit()
@@ -574,6 +576,122 @@ class SettingsWindow(QWidget):
                              "(~220 Mo) est téléchargé au premier usage.", muted=True, wrap=True))
         lay.addStretch(1)
         return w
+
+    def _chucks_card(self):
+        from . import chucks
+        ch = self.c["manuals"].get("chucks", {})
+        card = Card("Chuck's Guides", "Guides détaillés et très illustrés de chucksguides.com, téléchargés et "
+                                      "mis à jour automatiquement (vérification hebdomadaire, seulement si un "
+                                      "guide a changé). Comptent ~50 à 150 Mo chacun.")
+        self.t_chucks = card.add("Mise à jour automatique", Toggle(ch.get("enabled", False)), stretch=False)
+        self.t_follow = card.add("Suivre mes modules", Toggle(ch.get("follow_installed", True)),
+                                 "Ajoute d'office les guides des modules installés (dossier de DCS ci-dessus).",
+                                 stretch=False)
+        card.add_widget(_label("Guides à télécharger :", muted=True))
+        self.chucks_list = QListWidget()
+        self.chucks_list.setFixedHeight(190)
+        card.add_widget(self.chucks_list)
+        brow = QHBoxLayout()
+        self.b_chucks = QPushButton("Mettre à jour maintenant")
+        self.b_chucks.setObjectName("primary")
+        self.b_chucks.setIcon(icon("refresh", ui.BASE, 15))
+        self.b_chucks.clicked.connect(self._update_chucks)
+        brow.addWidget(self.b_chucks)
+        mine = QPushButton("Cocher mes modules")
+        mine.clicked.connect(self._check_installed)
+        brow.addWidget(mine)
+        brow.addStretch(1)
+        card.lay.addLayout(brow)
+        self.chucks_bar = QProgressBar()
+        self.chucks_bar.setTextVisible(False)
+        self.chucks_bar.setRange(0, 1000)
+        self.chucks_bar.hide()
+        card.add_widget(self.chucks_bar)
+        self.chucks_result = card.add_widget(_result())
+
+        state = chucks.load_state()
+        self._fill_chucks(state["guides"], ch.get("aircraft", []))
+        self._chucks_status(state)
+        if not state["guides"]:
+            _show(self.chucks_result, "Chargement de la liste des guides…")
+            self._bg(chucks.list_guides, lambda res: _show(self.chucks_result, f"Liste indisponible : {res}", "err")
+                     if isinstance(res, Exception) else (self._fill_chucks(res, ch.get("aircraft", [])),
+                                                         self._chucks_status(chucks.load_state())))
+        return card
+
+    def _fill_chucks(self, guides, selected):
+        self.chucks_list.clear()
+        for slug, name in sorted(guides.items(), key=lambda kv: kv[1]):
+            it = QListWidgetItem(name)
+            it.setData(Qt.UserRole, slug)
+            it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Checked if slug in selected else Qt.Unchecked)
+            self.chucks_list.addItem(it)
+
+    def _chucks_checked(self):
+        return [self.chucks_list.item(i).data(Qt.UserRole) for i in range(self.chucks_list.count())
+                if self.chucks_list.item(i).checkState() == Qt.Checked]
+
+    def _chucks_status(self, state):
+        import time as _t
+        files = state.get("files", {})
+        if not files:
+            _show(self.chucks_result, "Aucun guide téléchargé." if state.get("guides") else "")
+            return
+        last = _t.strftime("%d/%m/%Y", _t.localtime(state["last_check"])) if state.get("last_check") else "jamais"
+        names = ", ".join(state["guides"].get(s, s) for s in files)
+        _show(self.chucks_result, f"✓ {len(files)} guide(s) : {names} — dernière vérification : {last}", "ok")
+
+    def _check_installed(self):
+        from . import chucks
+        dcs_dir = self.cb_dcsdir.get().strip()
+        guides = {self.chucks_list.item(i).data(Qt.UserRole): 1 for i in range(self.chucks_list.count())}
+        mine = chucks.installed_slugs(guides, dcs_dir)
+        if not mine:
+            _show(self.chucks_result, "Aucun module trouvé : renseigne le dossier de DCS World ci-dessus.", "err")
+            return
+        for i in range(self.chucks_list.count()):
+            it = self.chucks_list.item(i)
+            if it.data(Qt.UserRole) in mine:
+                it.setCheckState(Qt.Checked)
+        _show(self.chucks_result, f"{len(mine)} guide(s) correspondant à tes modules cochés.", "ok")
+
+    def _update_chucks(self):
+        from . import chucks
+        self._collect()                        # la sélection courante, même non enregistrée
+        cfg = copy.deepcopy(self.c)
+        if not self.app.chucks_selection(cfg):
+            _show(self.chucks_result, "Coche au moins un guide (ou active « Suivre mes modules »).", "err")
+            return
+        self.b_chucks.setEnabled(False)
+        self.chucks_bar.show()
+        self.chucks_bar.setValue(0)
+
+        def progress(msg, frac=None):
+            def f():
+                if self.alive():
+                    _show(self.chucks_result, msg)
+                    if frac is not None:
+                        self.chucks_bar.setValue(int(frac * 1000))
+            self.call(f)
+
+        def done(res):
+            self.b_chucks.setEnabled(True)
+            self.chucks_bar.hide()
+            if isinstance(res, Exception):
+                _show(self.chucks_result, f"Mise à jour impossible : {res}", "err")
+                return
+            updated, errors = res
+            self._chucks_status(chucks.load_state())
+            msg = self.chucks_result.text()
+            if updated:
+                msg = f"Téléchargé : {', '.join(updated)}. Manuels réindexés.\n" + msg
+            if errors:
+                msg += "\nErreurs : " + " ; ".join(errors)
+            _show(self.chucks_result, msg, "err" if errors and not updated else "ok")
+            if self.app.manuals.ready:
+                _show(self.index_result, self._summary_text(self.app.manuals.summary()), "ok")
+        self._bg(lambda: self.app.update_chucks(progress, cfg=cfg), done)
 
     def _folder_row(self, field):
         roww = QWidget()
@@ -1058,6 +1176,8 @@ class SettingsWindow(QWidget):
         c["audio"]["beeps"] = self.t_beeps.isChecked()
         c["manuals"].update(enabled=self.t_manuals.isChecked(), dcs_dir=self.cb_dcsdir.get().strip(),
                             extra_dir=self.e_extra.get().strip())
+        c["manuals"]["chucks"] = {"enabled": self.t_chucks.isChecked(), "follow_installed": self.t_follow.isChecked(),
+                                  "aircraft": self._chucks_checked()}
         c["dcs"].update(udp_port=self.s_port.value(), saved_games=self.cb_saved.currentText().strip())
         c["overlay"].update(self._overlay_values())
 

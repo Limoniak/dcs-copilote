@@ -193,6 +193,11 @@ QPushButton#chip:hover {{ color: {TEXT}; border-color: #3a4452; background: rgba
 QToolButton#mic {{ background: {RAISED}; border: 1px solid {BORDER}; border-radius: 18px; }}
 QToolButton#mic:hover {{ border-color: #3a4452; }}
 QToolButton#mic:pressed {{ background: rgba(251,113,133,0.25); border-color: {LISTEN}; }}
+QListWidget {{ background: {RAISED}; border: 1px solid {BORDER}; border-radius: 9px; padding: 4px; }}
+QListWidget::item {{ padding: 4px 6px; border-radius: 6px; }}
+QListWidget::item:hover {{ background: rgba(255,255,255,0.05); }}
+QListWidget::indicator {{ width: 16px; height: 16px; border-radius: 4px; border: 1px solid #3a4452; background: {SURFACE}; }}
+QListWidget::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
 QProgressBar {{ background: {RAISED}; border: none; border-radius: 4px; max-height: 8px; }}
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: 4px; }}
 QMenu {{ background: {RAISED}; border: 1px solid {BORDER}; border-radius: 8px; padding: 4px; }}

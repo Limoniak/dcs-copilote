@@ -63,9 +63,14 @@ def dcs_install_candidates():
     return out
 
 
-def find_pdfs(dcs_dir, extra_dir):
-    """[(chemin, module)] : manuels officiels (Mods/aircraft/<module>/Doc) + PDF du dossier perso."""
+def find_pdfs(dcs_dir, extra_dir, chucks=True):
+    """[(chemin, module)] : manuels officiels (Mods/aircraft/<module>/Doc), Chuck's Guides téléchargés
+    et PDF du dossier perso."""
     out = []
+    if chucks:
+        from .chucks import DATA_DIR
+        for p in glob.glob(os.path.join(DATA_DIR, "*.pdf")):
+            out.append((p, os.path.splitext(os.path.basename(p))[0]))
     if dcs_dir:
         for p in glob.glob(os.path.join(dcs_dir, "Mods", "aircraft", "*", "Doc", "**", "*.pdf"), recursive=True):
             module = os.path.relpath(p, os.path.join(dcs_dir, "Mods", "aircraft")).split(os.sep)[0]
@@ -96,19 +101,53 @@ def _chunks(text):
     return out
 
 
-def _embedder():
+def _embedder(threads=None):
     from fastembed import TextEmbedding
     os.makedirs(MODEL_DIR, exist_ok=True)
-    return TextEmbedding(EMBED_MODEL, cache_dir=MODEL_DIR)
+    return TextEmbedding(EMBED_MODEL, cache_dir=MODEL_DIR, threads=threads)
 
 
-def build_index(pdfs, progress=lambda done, total, msg: None, should_stop=lambda: False):
-    """Extrait, découpe et vectorise tous les PDF. Renvoie un résumé (dict)."""
+def _doc_key(path):
+    st = os.stat(path)
+    return f"{os.path.abspath(path)}|{st.st_size}|{int(st.st_mtime)}"
+
+
+def _load_raw():
+    try:
+        with open(os.path.join(INDEX_DIR, "chunks.json"), encoding="utf-8") as f:
+            data = json.load(f)
+        return data, np.load(os.path.join(INDEX_DIR, "emb.npy"))
+    except (OSError, ValueError):
+        return None, None
+
+
+def build_index(pdfs, progress=lambda done, total, msg: None, should_stop=lambda: False, threads=None):
+    """Extrait, découpe et vectorise les PDF. Incrémental : un PDF inchangé depuis la dernière
+    indexation est repris tel quel, seuls les nouveaux ou modifiés sont analysés. Renvoie un résumé."""
     import pymupdf
-    chunks, docs = [], []
+    old, old_emb = _load_raw()
+    reuse = {}
+    if old and old.get("model") == EMBED_MODEL:
+        rows = {}
+        for i, c in enumerate(old["chunks"]):
+            rows.setdefault(c["doc"], []).append(i)
+        reuse = {d["key"]: (d, rows.get(di, [])) for di, d in enumerate(old["docs"]) if d.get("key")}
+
+    chunks, rows, docs = [], [], []           # rows[i] : vecteur repris, ou None à calculer
     for i, (path, module) in enumerate(pdfs):
         if should_stop():
             raise InterruptedError("indexation annulée")
+        try:
+            key = _doc_key(path)
+        except OSError:
+            continue
+        if key in reuse:
+            d, idx = reuse[key]
+            for j in idx:
+                chunks.append(dict(old["chunks"][j], doc=len(docs)))
+                rows.append(old_emb[j])
+            docs.append(dict(d, module=module))
+            continue
         progress(i, len(pdfs), f"Lecture de {os.path.basename(path)}…")
         try:
             with pymupdf.open(path) as doc:
@@ -120,31 +159,36 @@ def build_index(pdfs, progress=lambda done, total, msg: None, should_stop=lambda
                     for c in _chunks(text):
                         if len(c) >= 80:
                             chunks.append({"doc": len(docs), "page": pno, "text": c})
+                            rows.append(None)
                 docs.append({"path": path, "name": os.path.basename(path), "module": module,
-                             "chunks": len(chunks) - n0})
+                             "chunks": len(chunks) - n0, "key": key})
         except Exception as e:  # noqa: BLE001
             print(f"[manuels] {path} illisible : {e}", flush=True)
     if not chunks:
         raise ValueError("aucun texte trouvé dans les PDF")
 
-    progress(0, len(chunks), "Chargement du modèle de recherche (1er lancement : ~220 Mo)…")
-    model = _embedder()
-    vecs = []
-    batch = 64
-    for s in range(0, len(chunks), batch):
-        if should_stop():
-            raise InterruptedError("indexation annulée")
-        part = [c["text"] for c in chunks[s:s + batch]]
-        vecs.extend(model.embed(part, batch_size=batch))
-        progress(min(s + batch, len(chunks)), len(chunks), "Analyse des manuels…")
-    emb = np.asarray(vecs, dtype=np.float32)
-    emb /= np.linalg.norm(emb, axis=1, keepdims=True) + 1e-9
+    todo = [i for i, r in enumerate(rows) if r is None]
+    if todo:
+        progress(0, len(todo), "Chargement du modèle de recherche (1er lancement : ~220 Mo)…")
+        model = _embedder(threads)
+        batch = 64
+        for s in range(0, len(todo), batch):
+            if should_stop():
+                raise InterruptedError("indexation annulée")
+            part = todo[s:s + batch]
+            for i, v in zip(part, model.embed([chunks[i]["text"] for i in part], batch_size=batch)):
+                v = np.asarray(v, dtype=np.float32)
+                rows[i] = v / (np.linalg.norm(v) + 1e-9)
+            progress(min(s + batch, len(todo)), len(todo), "Analyse des manuels…")
+    emb = np.asarray(rows, dtype=np.float16)
 
     os.makedirs(INDEX_DIR, exist_ok=True)
-    np.save(os.path.join(INDEX_DIR, "emb.npy"), emb.astype(np.float16))
+    np.save(os.path.join(INDEX_DIR, "emb.npy"), emb)
     with open(os.path.join(INDEX_DIR, "chunks.json"), "w", encoding="utf-8") as f:
         json.dump({"model": EMBED_MODEL, "docs": docs, "chunks": chunks}, f, ensure_ascii=False)
-    return summary_of(docs, len(chunks))
+    out = summary_of(docs, len(chunks))
+    out["new_chunks"] = len(todo)
+    return out
 
 
 def summary_of(docs, n_chunks):
