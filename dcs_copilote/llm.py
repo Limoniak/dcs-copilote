@@ -49,7 +49,32 @@ RETRY_STATUS = {429, 500, 502, 503, 504}      # surcharge / limite passagère : 
 RETRY_DELAYS = (1.0, 2.5)                     # court : on est en vol
 # « réflexion » minimale des modèles qui raisonnent avant de répondre (Gemini 2.5, GPT-5, Grok mini…) :
 # 1 à 3 s de gagnées en vol. Un modèle qui refuse le paramètre est rappelé sans.
-FAST_EFFORT = {"gemini": "none", "openai": "minimal", "grok": "low"}
+# Valeurs essayées dans l'ordre : Gemini 2.5 accepte « none », Gemini 3 refuse de couper toute réflexion
+# (400 « invalid argument » sans préciser le paramètre) mais accepte « minimal » / « low ».
+FAST_EFFORT = {"gemini": ["none", "minimal", "low"], "openai": ["minimal", "low"], "grok": ["low"]}
+# paramètres acceptés par chaque modèle, appris au premier refus : (fournisseur, modèle) → (effort, température ?)
+# Retenus sur disque pour ne pas refaire les essais à chaque lancement.
+_ACCEPTED_PATH = os.path.join("data", "llm_params.json")
+
+
+def _load_accepted():
+    try:
+        with open(_ACCEPTED_PATH, encoding="utf-8") as f:
+            return {tuple(k.split("|", 1)): tuple(v) for k, v in json.load(f).items()}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _save_accepted():
+    try:
+        os.makedirs(os.path.dirname(_ACCEPTED_PATH), exist_ok=True)
+        with open(_ACCEPTED_PATH, "w", encoding="utf-8") as f:
+            json.dump({"|".join(k): list(v) for k, v in _accepted.items()}, f, indent=1)
+    except OSError:
+        pass
+
+
+_accepted = _load_accepted()
 
 
 def _api_message(text):
@@ -244,24 +269,33 @@ class LLMClient:
         raise LLMError(err, kind)
 
     def _request(self, model, messages, headers, fast=False):
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": self.cfg.get("temperature", 0.3),
-            "stream": True,
-        }
-        effort = FAST_EFFORT.get(self.cfg["provider"]) if fast else None
-        if effort:
-            payload["reasoning_effort"] = effort
-        payload.update(self.cfg.get("extra") or {})
-        r = self._post(payload, headers)
-        # paramètres optionnels refusés par certains modèles (température des modèles de raisonnement
-        # OpenAI, reasoning_effort des modèles sans réflexion) : on les retire et on rappelle
-        for key in ("reasoning_effort", "temperature"):
-            if r.status_code == 400 and key in payload and key.split("_")[0] in r.text:
+        """Requête en streaming. Les paramètres optionnels (réflexion limitée, température) ne sont pas
+        acceptés par tous les modèles et le refus (400) ne dit pas toujours lequel : on essaie les
+        variantes de la plus rapide à la plus simple, et on retient celle qui passe pour ce modèle."""
+        key = (self.cfg["provider"], model)
+        efforts = (FAST_EFFORT.get(self.cfg["provider"], []) if fast else []) + [None]
+        variants = [(e, True) for e in efforts] + [(None, False)]
+        if key in _accepted:
+            ok_effort, ok_temp = _accepted[key]
+            if not fast:
+                ok_effort = None
+            variants = [(ok_effort, ok_temp)] + [v for v in variants if v != (ok_effort, ok_temp)]
+        r = None
+        for effort, with_temp in variants:
+            payload = {"model": model, "messages": messages, "stream": True}
+            if with_temp:
+                payload["temperature"] = self.cfg.get("temperature", 0.3)
+            if effort:
+                payload["reasoning_effort"] = effort
+            payload.update(self.cfg.get("extra") or {})
+            if r is not None:
                 r.close()
-                payload.pop(key)
-                r = self._post(payload, headers)
+            r = self._post(payload, headers)
+            if r.status_code != 400:
+                if r.status_code == 200 and (fast or key not in _accepted) and _accepted.get(key) != (effort, with_temp):
+                    _accepted[key] = (effort, with_temp)
+                    _save_accepted()
+                return r
         return r
 
     def _read(self, r):
