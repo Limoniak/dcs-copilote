@@ -2,12 +2,13 @@
 import copy
 import glob
 import os
+import re
 import sys
 import threading
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
+from PySide6.QtGui import QColor, QFontDatabase, QKeySequence, QShortcut
+from PySide6.QtWidgets import (QButtonGroup, QColorDialog, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListWidget, QListWidgetItem, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox,
                                QStackedWidget, QToolButton, QVBoxLayout, QWidget)
 
@@ -27,9 +28,26 @@ PROVIDERS = {
     "custom": ("Autre", "Compatible OpenAI", "Open WebUI, LM Studio…"),
 }
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v3", "distil-large-v3"]
-FR_VOICES = ["fr_FR-siwis-medium", "fr_FR-siwis-low", "fr_FR-upmc-medium", "fr_FR-tom-medium",
+FR_VOICES = ["fr_FR-tom-medium", "fr_FR-siwis-medium", "fr_FR-siwis-low", "fr_FR-upmc-medium",
              "fr_FR-gilles-low", "fr_FR-mls-medium"]
 DEFAULT_DEV = "Par défaut"
+# Repères dans le nom des modèles : les catalogues changent trop vite pour être codés en dur.
+NOT_CHAT = {"embed", "embedding", "whisper", "tts", "transcribe", "audio", "image", "dall", "moderation", "guard",
+            "safeguard", "realtime", "rerank", "imagen", "veo", "aqa", "search", "computer", "sora", "orpheus", "playai"}
+THINKING = {"thinking", "reasoning", "r1"}
+FAST = {"mini", "flash", "fast", "lite", "haiku", "instant", "nano", "turbo", "small"}
+SLOW = {"pro", "opus", "large", "o1", "o3", "o4", "405b"}
+# Modèles conseillés, du meilleur au repli : le premier encore proposé par le fournisseur est « Conseillé »
+# (les fournisseurs retirent leurs modèles régulièrement). Sinon : le modèle par défaut de config.py.
+# Groq, mesuré en octobre 2026 : 1er mot en 0,3 s (qwen) et 0,6 s (gpt-oss-20b).
+RECOMMENDED = {"groq": ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"]}
+MODEL_KINDS = {
+    "fast": "Rapide : idéal pour la voix en vol.",
+    "general": "Polyvalent : correct en vol, à essayer avec « Tester l'IA ».",
+    "slow": "Plus précis mais lent (plusieurs secondes avant le 1er mot) : plutôt pour les questions tapées.",
+    "other": "Ne répond pas aux questions (transcription, images, recherche…) : choisis-en un autre.",
+}
+DEFAULT_FONT = "Par défaut"
 ENGINES = [("edge", "Microsoft"), ("openai", "OpenAI"), ("piper", "Piper"), ("system", "Système")]
 ENGINE_HINTS = {
     "edge": "Voix neuronales très naturelles, gratuites, sans clé. Service en ligne non officiel : "
@@ -46,8 +64,68 @@ TEST_PHRASE = "Contact radar, deux bandits à douze heures, trente nautiques."
 
 
 # --------------------------------------------------------------------------- briques
+def _links(text):
+    """« console.groq.com/keys » devient un lien cliquable."""
+    return re.sub(r"\b((?:[a-z0-9-]+\.)+(?:com|ai)(?:/[\w/-]*)?)", r'<a href="https://\1">\1</a>', text)
+
+
+def model_kind(model):
+    """« fast », « general », « slow » ou « other » (pas un modèle de conversation), d'après son nom."""
+    words = set(re.split(r"[-_./:]", model.lower()))
+    if words & NOT_CHAT:
+        return "other"
+    if words & THINKING:
+        return "slow"
+    if words & FAST:
+        return "fast"
+    return "slow" if words & SLOW else "general"
+
+
+def recommended(provider, available=None):
+    """Modèle conseillé ; available = modèles proposés par le fournisseur (None : liste pas encore reçue)."""
+    from .config import DEFAULTS
+    cands = RECOMMENDED.get(provider, []) + [DEFAULTS["llm"]["providers"].get(provider, {}).get("model")]
+    return next((m for m in cands if m and (available is None or m in available)), None)
+
+
+def describe_model(provider, model, available=None):
+    if not model:
+        return ""
+    if available is not None and model not in available:
+        return "Ce modèle n'est plus proposé par le fournisseur (retiré ?) : choisis-en un dans la liste."
+    if model == recommended(provider, available):
+        return "Conseillé : bon équilibre entre vitesse et justesse pour la voix en vol."
+    text = MODEL_KINDS[model_kind(model)]
+    return "Gratuit. " + text if model.endswith(":free") else text
+
+
+def sort_models(provider, models):
+    """Modèles de conversation, le conseillé puis les rapides en tête."""
+    best = recommended(provider, models)
+    order = {"fast": 1, "general": 2, "slow": 3}
+    chat = [m for m in models if model_kind(m) != "other"]
+    return sorted(chat, key=lambda m: (m != best, order[model_kind(m)], m))
+
+
+def play_test_phrase(tts_cfg, llm_cfg, out, text=TEST_PHRASE):
+    """Lit une phrase avec la voix et l'effet radio réglés ; renvoie les remarques (repli de voix…)."""
+    from .audio import _dev, make_tts, play, radio_fx, squelch
+    notes = []
+    tts = make_tts(dict(tts_cfg, enabled=True), lambda m, error=False: notes.append(m), llm_cfg)
+    audio, sr = tts.synth(text)
+    if audio is None:
+        raise RuntimeError("aucun son produit")
+    level = int(tts_cfg.get("radio", 0))
+    if level:
+        import numpy as np
+        audio = np.concatenate([squelch(sr, level, "open"), radio_fx(audio, sr, level), squelch(sr, level, "tail")])
+    play(audio, sr, _dev(out))
+    return " ".join(notes)
+
+
 def _label(text, muted=False, h1=False, h2=False, wrap=False):
-    lbl = QLabel(text)
+    lbl = QLabel(_links(text))
+    lbl.setOpenExternalLinks(True)
     for prop, on in (("muted", muted), ("h1", h1), ("h2", h2)):
         if on:
             lbl.setProperty(prop, True)
@@ -157,6 +235,29 @@ class Slider(QWidget):
 
     def value(self):
         return self.s.value()
+
+
+class ColorButton(QPushButton):
+    """Pastille de couleur ; un clic ouvre le sélecteur."""
+    changed = Signal(str)
+
+    def __init__(self, color):
+        super().__init__()
+        self.setFixedSize(64, 28)
+        self.setCursor(Qt.PointingHandCursor)
+        self.clicked.connect(self._pick)
+        self._set(color)
+
+    def _set(self, color):
+        self.color = QColor(color).name()
+        self.setToolTip(self.color)
+        self.setStyleSheet(f"QPushButton {{ background: {self.color}; border: 1px solid #3a4452; border-radius: 6px; }}")
+
+    def _pick(self):
+        c = QColorDialog.getColor(QColor(self.color), self.window(), "Couleur")
+        if c.isValid():
+            self._set(c.name())
+            self.changed.emit(self.color)
 
 
 def _spin(lo, hi, value, step=1, suffix=""):
@@ -413,9 +514,12 @@ class SettingsWindow(QWidget):
         ml.addWidget(self.cb_model, 1)
         self.b_models = QPushButton("Lister")
         self.b_models.setIcon(icon("refresh", TEXT, 15))
-        self.b_models.clicked.connect(self._list_models)
+        self.b_models.clicked.connect(lambda: self._list_models())
         ml.addWidget(self.b_models)
-        conn.add("Modèle", mrow, "Pour la voix en vol, préfère un modèle rapide (mini, flash, fast).")
+        conn.add("Modèle", mrow, "Les plus adaptés à la voix en vol sont en tête de liste.")
+        self.model_hint = conn.add_widget(_label("", muted=True, wrap=True))
+        self._available = {}                     # fournisseur → modèles proposés (reçus avec « Lister »)
+        self.cb_model.currentTextChanged.connect(self._model_hint)
         self.cb_fallback = conn.add("Modèles de secours", _combo([], editable=True),
                                     "Essayés dans l'ordre si le modèle principal est surchargé ou à court de "
                                     "quota. Plusieurs : séparés par des virgules.")
@@ -482,8 +586,15 @@ class SettingsWindow(QWidget):
         hint = PROVIDERS.get(name, ("", "", ""))[2]
         if p.get("api_key_env"):
             hint += f" — ou variable d'environnement {p['api_key_env']}"
-        self.key_hint.setText(hint)
+        self.key_hint.setText(_links(hint))
         _show(self.llm_result, "")
+        self._model_hint()
+        if p.get("api_key") or not p.get("api_key_env"):
+            self._list_models(manual=False)      # liste prête dès le choix du fournisseur
+
+    def _model_hint(self, *_):
+        self.model_hint.setText(describe_model(self.provider, self.cb_model.currentText().strip(),
+                                               self._available.get(self.provider)))
 
     def _store_provider(self):
         p = self.c["llm"]["providers"][self.provider]
@@ -497,24 +608,35 @@ class SettingsWindow(QWidget):
         self._store_provider()
         return copy.deepcopy(self.c["llm"])
 
-    def _list_models(self):
+    def _list_models(self, manual=True):
+        """manual=False : remplissage discret au choix du fournisseur (pas d'erreur affichée)."""
         from .llm import LLMClient
-        cfg = self._llm_cfg()
-        self.b_models.setEnabled(False)
-        _show(self.llm_result, "Récupération des modèles…")
+        cfg, prov = self._llm_cfg(), self.provider
+        if manual:
+            self.b_models.setEnabled(False)
+            _show(self.llm_result, "Récupération des modèles…")
 
         def done(res):
             self.b_models.setEnabled(True)
-            if isinstance(res, Exception):
-                _show(self.llm_result, f"Liste impossible : {res}", "err")
+            if prov != self.provider:            # fournisseur changé entre-temps
                 return
+            if isinstance(res, Exception):
+                if manual:
+                    _show(self.llm_result, f"Liste impossible : {res}", "err")
+                return
+            self._available[prov] = set(res)
+            res = sort_models(prov, res)
             for cb in (self.cb_model, self.cb_fallback):
                 cur = cb.currentText()
                 cb.clear()
                 cb.addItems(res)
                 cb.setEditText(cur)
-            _show(self.llm_result, f"{len(res)} modèles disponibles — ouvre la liste « Modèle ».", "ok")
-            self.cb_model.showPopup()
+            for i, m in enumerate(res):             # explication au survol dans la liste
+                self.cb_model.setItemData(i, describe_model(prov, m, self._available[prov]), Qt.ToolTipRole)
+            self._model_hint()
+            if manual:
+                _show(self.llm_result, f"{len(res)} modèles — les plus adaptés à la voix en vol en tête.", "ok")
+                self.cb_model.showPopup()
         self._bg(lambda: LLMClient(cfg).models(), done)
 
     def _test_llm(self):
@@ -835,14 +957,14 @@ class SettingsWindow(QWidget):
         stt, tts = self.c["stt"], self.c["tts"]
 
         rec = Card("Reconnaissance vocale")
-        self.seg_stt = rec.add("Moteur", Segmented([("local", "Sur ce PC (Whisper)"), ("api", "En ligne (rapide)")],
-                                                   stt.get("engine", "local")))
+        self.seg_stt = rec.add("Moteur", Segmented([("auto", "Automatique"), ("local", "Sur ce PC (Whisper)"),
+                                                    ("api", "En ligne (rapide)")], stt.get("engine", "auto")))
         self.stt_hint = rec.add_widget(_label("", muted=True, wrap=True))
         self.cb_sttp = rec.add("Service", _combo(["groq", "openai", "custom"], stt.get("api_provider", "groq")),
                                "Groq : gratuit (clé sur console.groq.com), ~0,3 s. OpenAI : payant.")
         self.e_sttkey = QLineEdit(stt.get("api_key", ""))
         self.e_sttkey.setEchoMode(QLineEdit.Password)
-        self.e_sttkey.setPlaceholderText("vide = GROQ_API_KEY / OPENAI_API_KEY (ou clé OpenAI de l'onglet IA)")
+        self.e_sttkey.setPlaceholderText("vide = clé Groq / OpenAI de l'onglet IA")
         rec.add("Clé API", self.e_sttkey)
         self.e_sttmodel = rec.add("Modèle", QLineEdit(stt.get("api_model", "")))
         self.e_sttmodel.setPlaceholderText("vide = whisper-large-v3-turbo (Groq) / gpt-4o-mini-transcribe (OpenAI)")
@@ -912,6 +1034,8 @@ class SettingsWindow(QWidget):
         for wdg in (self.cb_sttp, self.e_sttkey, self.e_sttmodel, self.e_sttbase):
             wdg.row.setVisible(engine == "api")
         self.stt_hint.setText(
+            "En ligne (Groq, ~0,3 s) si une clé Groq ou OpenAI est renseignée dans l'onglet IA, sinon Whisper "
+            "sur ce PC. Whisper local prend toujours le relais si le service ne répond pas." if engine == "auto" else
             "Ta voix est envoyée au service choisi : transcription en ~0,3 s au lieu de 1 à 3 s sur processeur. "
             "Whisper local reste chargé et prend le relais si le service ne répond pas." if engine == "api" else
             "Gratuit et hors-ligne ; 1 à 3 s de transcription sur processeur selon le modèle.")
@@ -950,26 +1074,14 @@ class SettingsWindow(QWidget):
         self._bg(lambda: download_voice(name), done)
 
     def _test_voice(self):
-        from .audio import _dev, make_tts, play, radio_fx, squelch
         self._collect()
-        tts_cfg, out = dict(self.c["tts"], enabled=True), self.c["audio"]["output_device"]
+        tts_cfg, out = copy.deepcopy(self.c["tts"]), self.c["audio"]["output_device"]
         llm_cfg = copy.deepcopy(self.c["llm"])
         self.b_say.setEnabled(False)
         _show(self.voice_result, "Synthèse…")
-        notes = []
 
         def work():
-            tts = make_tts(tts_cfg, lambda m, error=False: notes.append(m), llm_cfg)
-            audio, sr = tts.synth(TEST_PHRASE)
-            if audio is None:
-                raise RuntimeError("aucun son produit")
-            level = int(tts_cfg.get("radio", 0))
-            if level:
-                import numpy as np
-                audio = np.concatenate([squelch(sr, level, "open"), radio_fx(audio, sr, level),
-                                        squelch(sr, level, "tail")])
-            play(audio, sr, _dev(out))
-            return " ".join(notes)
+            return play_test_phrase(tts_cfg, llm_cfg, out)
 
         def done(res):
             self.b_say.setEnabled(True)
@@ -1217,26 +1329,70 @@ class SettingsWindow(QWidget):
 
     # ------------------------------------------------------------------ Overlay
     def _page_overlay(self):
-        w, lay = self._page("Overlay", "La fenêtre de réponses. Les changements s'affichent en direct.")
+        w, lay = self._page("Overlay", "La fenêtre de réponses par-dessus DCS. Les changements s'affichent en direct "
+                                       "sur l'overlay ; « Annuler » revient à l'état précédent.")
         o = self.c["overlay"]
-        card = Card()
-        self.s_alpha = card.add("Opacité du fond", Slider(30, 100, float(o["alpha"]) * 100, lambda v: f"{v} %"))
-        self.s_fs = card.add("Taille du texte", _spin(8, 28, o["font_size"], suffix=" pt"), stretch=False)
-        self.s_lines = card.add("Hauteur maximale", _spin(3, 50, o["lines"], suffix=" lignes"),
+        look = Card("Apparence")
+        self.s_alpha = look.add("Opacité du fond", Slider(0, 100, float(o["alpha"]) * 100, lambda v: f"{v} %"),
+                                "0 % : texte seul, sans fond.")
+        self.s_opacity = look.add("Opacité générale", Slider(20, 100, float(o.get("opacity", 1)) * 100,
+                                                              lambda v: f"{v} %"), "Texte compris, pour rester discret.")
+        self.c_bg = look.add("Couleur du fond", ColorButton(o.get("bg_color", ui.BASE)), stretch=False)
+        self.c_accent = look.add("Couleur d'accent", ColorButton(o.get("accent", ACCENT)),
+                                 "Question posée, étape de checklist en cours.", stretch=False)
+        self.s_width = look.add("Largeur", _spin(280, 1600, o["width"], 20, " px"), stretch=False)
+        self.s_lines = look.add("Hauteur maximale", _spin(3, 50, o["lines"], suffix=" lignes"),
                                 "Au-delà, la réponse défile.", stretch=False)
-        self.s_width = card.add("Largeur", _spin(280, 1600, o["width"], 20, " px"), stretch=False)
-        lay.addWidget(card)
+        lay.addWidget(look)
+
+        text = Card("Texte")
+        self.cb_font = text.add("Police", _combo([DEFAULT_FONT] + QFontDatabase.families(),
+                                                 o.get("font_family") or DEFAULT_FONT))
+        self.s_fs = text.add("Taille", _spin(8, 40, o["font_size"], suffix=" pt"), stretch=False)
+        self.t_bold = text.add("Gras", Toggle(o.get("bold", False)), "Plus lisible sur un ciel clair ou en "
+                                                                     "petite taille.", stretch=False)
+        self.c_text = text.add("Couleur des réponses", ColorButton(o.get("text_color", TEXT)), stretch=False)
+        lay.addWidget(text)
+
+        parts = Card("Éléments affichés", "Masque ce dont tu ne te sers pas pour un overlay plus compact. "
+                                          "En-tête masqué : clic droit sur l'overlay pour les réglages.")
+        self.t_parts = {}
+        for key, label in (("show_header", "En-tête (appareil, boutons)"), ("show_question", "Question posée"),
+                           ("show_actions", "Boutons Répéter / Détailler"),
+                           ("show_input", "Champ de question et micro"), ("show_status", "Barre d'état")):
+            self.t_parts[key] = parts.add(label, Toggle(o.get(key, True)), stretch=False)
+        lay.addWidget(parts)
+
+        beh = Card("En vol")
+        self.s_autohide = beh.add("Masquage automatique", _spin(0, 600, o.get("autohide", 0), 5, " s"),
+                                  "Masqué après ce délai sans activité, il réapparaît à la question suivante "
+                                  "ou à une alerte.", stretch=False)
+        self.s_autohide.setSpecialValueText("jamais")
+        self.t_through = beh.add("Clics traversants", Toggle(o.get("click_through", False)),
+                                 "Les clics passent à DCS à travers l'overlay. Il n'est alors plus cliquable : "
+                                 "réglages par l'icône de la zone de notification.", stretch=False)
+        self.t_locked = beh.add("Verrouiller la position", Toggle(o.get("locked", False)),
+                                "Évite de le déplacer par erreur.", stretch=False)
+        lay.addWidget(beh)
         lay.addWidget(_label("Astuce : fais glisser l'overlay par son en-tête ; sa position est mémorisée.",
                              muted=True, wrap=True))
         lay.addStretch(1)
-        for sig in (self.s_alpha.s.valueChanged, self.s_fs.valueChanged, self.s_lines.valueChanged,
-                    self.s_width.valueChanged):
+        for sig in (self.s_alpha.s.valueChanged, self.s_opacity.s.valueChanged, self.s_fs.valueChanged,
+                    self.s_lines.valueChanged, self.s_width.valueChanged, self.s_autohide.valueChanged,
+                    self.cb_font.currentTextChanged, self.c_bg.changed, self.c_accent.changed, self.c_text.changed,
+                    self.t_bold.toggled, self.t_through.toggled, self.t_locked.toggled,
+                    *(t.toggled for t in self.t_parts.values())):
             sig.connect(self._preview_overlay)
         return w
 
     def _overlay_values(self):
-        return dict(alpha=round(self.s_alpha.value() / 100, 2), font_size=self.s_fs.value(),
-                    lines=self.s_lines.value(), width=self.s_width.value())
+        font = self.cb_font.currentText().strip()
+        return dict(alpha=round(self.s_alpha.value() / 100, 2), opacity=round(self.s_opacity.value() / 100, 2),
+                    font_size=self.s_fs.value(), lines=self.s_lines.value(), width=self.s_width.value(),
+                    font_family="" if font == DEFAULT_FONT else font, bold=self.t_bold.isChecked(),
+                    bg_color=self.c_bg.color, accent=self.c_accent.color, text_color=self.c_text.color,
+                    autohide=self.s_autohide.value(), click_through=self.t_through.isChecked(),
+                    locked=self.t_locked.isChecked(), **{k: t.isChecked() for k, t in self.t_parts.items()})
 
     def _preview_overlay(self, *_):
         self.app.overlay.apply_style(dict(self.app.cfg["overlay"], **self._overlay_values()))
@@ -1250,14 +1406,14 @@ class SettingsWindow(QWidget):
                         custom_prompt=self.e_custom.toPlainText().strip(), callsign=self.e_callsign.text().strip(),
                         temperature=self.s_temp.value() / 10, max_history=self.s_hist.value(),
                         timeout=self.s_timeout.value())
-        c["stt"].update(engine=self.seg_stt.value() or "local", api_provider=self.cb_sttp.currentText().strip(),
+        c["stt"].update(engine=self.seg_stt.value() or "auto", api_provider=self.cb_sttp.currentText().strip(),
                         api_key=self.e_sttkey.text().strip(), api_model=self.e_sttmodel.text().strip(),
                         api_base=self.e_sttbase.text().strip())
         c["stt"].update(model=self.cb_stt.currentText().strip(), device=self.seg_dev.value() or "cpu",
                         compute_type=self.cb_ct.currentText().strip(),
                         language=self.e_lang.text().strip() or None)
         c["tts"].update(enabled=self.t_tts.isChecked(), speak_typed=self.t_typed.isChecked(),
-                        engine=self.seg_engine.value() or "piper",
+                        engine=self.seg_engine.value() or "edge",
                         edge_voice=self.cb_edge.currentText().strip(),
                         openai_voice=self.cb_openai.currentText().strip(), openai_key=self.e_okey.text().strip(),
                         radio=int(self.seg_radio.value() or 0),

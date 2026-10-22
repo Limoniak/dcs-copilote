@@ -15,7 +15,7 @@ Ton copilote vocal pour DCS World (Windows / Linux) : il te parle comme un équi
 
 ## Version Windows (.exe)
 
-Pas besoin d'installer Python : télécharge `DCS-Copilote-vX.Y.Z-windows.zip` dans les **Releases** du dépôt, décompresse-le dans un dossier où tu peux écrire (par exemple `Documents\DCS-Copilote`, pas `Program Files`), puis lance `DCS-Copilote.exe`. La config, le journal, les manuels et les modèles téléchargés sont rangés à côté de l'exécutable.
+Pas besoin d'installer Python : télécharge `DCS-Copilote-vX.Y.Z-windows.zip` dans les **Releases** du dépôt, décompresse-le dans un dossier où tu peux écrire (par exemple `Documents\DCS-Copilote`, pas `Program Files`), puis lance `DCS-Copilote.exe`. La config, le journal, les manuels et les modèles téléchargés sont rangés à côté de l'exécutable. Quand une nouvelle version sort, l'appli le signale au démarrage : décompresse le nouveau .zip par-dessus, tes réglages sont conservés.
 
 Fabrication automatique par GitHub Actions (`.github/workflows/windows-exe.yml`) :
 - **publier une version** : `git tag v1.0.0 && git push origin v1.0.0` → construit, vérifie (`--selftest`) et publie le .zip dans les Releases ;
@@ -60,7 +60,9 @@ La recherche est sémantique et multilingue : une question en français trouve l
 
 ## Réglages — bouton ⚙ de l'overlay
 
-Tout se configure dans la fenêtre **Réglages** (bouton ⚙ de l'overlay), qui s'ouvre toute seule au premier lancement ou quand la clé de l'IA choisie manque. « Enregistrer » applique les changements immédiatement, sans redémarrer.
+Au **premier lancement**, un assistant en 4 étapes règle l'essentiel : clé de l'IA (Groq, gratuit, par défaut ; la même clé sert à la reconnaissance vocale en ligne), ton équipier (indicatif, voix, effet radio, longueur des réponses, avec un bouton pour l'écouter), bouton PTT, script DCS. Par défaut, la voix est masculine (Microsoft Henri) avec l'effet radio fort.
+
+Tout le reste se configure dans la fenêtre **Réglages** (bouton ⚙ de l'overlay), qui s'ouvre aussi toute seule quand la clé de l'IA choisie manque. « Enregistrer » applique les changements immédiatement, sans redémarrer.
 
 | Onglet | Contenu |
 |---|---|
@@ -69,12 +71,13 @@ Tout se configure dans la fenêtre **Réglages** (bouton ⚙ de l'overlay), qui 
 | **Voix** | Whisper (modèle, CPU/GPU, langue) ; synthèse vocale : **Microsoft** (voix neuronales naturelles, gratuites, en ligne), **OpenAI** (payant, clé OpenAI), **Piper** (local) ou voix système ; débit, « Tester la voix ». Les voix en ligne retombent sur Piper si le service ne répond pas. |
 | **Audio** | Micro, sortie casque, bips |
 | **Bouton PTT** | « Assigner… » puis appuie sur la touche ou le bouton HOTAS voulu |
-| **DCS & Overlay** | Dossier Saved Games/DCS, installation du script DCS en un clic, port UDP ; opacité, taille du texte, lignes, largeur, sans bordure |
+| **DCS & Overlay** | Dossier Saved Games/DCS, installation du script DCS en un clic, port UDP ; opacité (fond, ou tout l'overlay), couleurs (fond, accent, réponses), police, taille, gras, largeur, hauteur ; éléments affichés (en-tête, question, boutons, saisie, barre d'état) ; masquage automatique après un délai sans activité, clics traversants vers DCS, position verrouillée. Clic droit sur l'overlay : réglages, même en-tête masqué |
 
 Fournisseurs d'IA proposés (tous via leur API compatible OpenAI) :
 
 | Fournisseur | Où obtenir la clé | Modèle par défaut |
 |---|---|---|
+| **Groq** (par défaut, gratuit) | console.groq.com/keys | `qwen/qwen3.8-27b` |
 | Ollama (local) | aucune clé | `qwen2.5:14b` |
 | ChatGPT (OpenAI) | platform.openai.com/api-keys | `gpt-4.1-mini` |
 | Google Gemini | aistudio.google.com/apikey | `gemini-2.5-flash` |
@@ -92,7 +95,7 @@ L'installation du script DCS copie `DCSAssistant.lua` dans `Saved Games/DCS/Scri
 ```lua
 pcall(function() local l=require('lfs'); dofile(l.writedir()..[[Scripts\DCSAssistant.lua]]) end)
 ```
-Compatible SRS, Tacview, Helios… (fonctions chaînées). Sans le script, choisis l'appareil dans le menu de l'overlay.
+Compatible SRS, Tacview, Helios… (fonctions chaînées). Au démarrage, l'appli propose de l'installer s'il manque et le met à jour tout seul s'il est ancien ; si DCS tourne sans rien envoyer, l'overlay le signale. Sans le script, choisis l'appareil dans le menu de l'overlay.
 
 ### Avancé : `config.json` et ligne de commande
 
@@ -102,7 +105,7 @@ Les réglages sont enregistrés dans `config.json` (modifiable à la main ; dict
 python main.py --ask "Comment je démarre l'APU ?" --aircraft "F/A-18C Hornet"   # test sans micro
 python main.py --models                              # modèles du fournisseur actif
 python main.py --provider grok --model grok-4        # changer d'IA pour ce lancement seulement
-python main.py --devices | --bind | --download-voice fr_FR-siwis-medium
+python main.py --devices | --bind | --download-voice fr_FR-tom-medium
 ```
 
 ## Limites

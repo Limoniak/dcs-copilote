@@ -37,7 +37,7 @@ jobs:
         run: pip install -r requirements.txt pyinstaller
 
       - name: Voix Piper
-        run: python main.py --download-voice fr_FR-siwis-medium
+        run: python main.py --download-voice fr_FR-tom-medium
 
       - name: Icône
         run: python build/make_icon.py
@@ -47,6 +47,11 @@ jobs:
 
       - name: Voix livrée avec l'appli
         run: Copy-Item -Recurse voices dist/DCS-Copilote/voices
+
+      # l'appli compare ce numéro à la dernière Release pour proposer les mises à jour
+      - name: Numéro de version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: Set-Content -Path dist/DCS-Copilote/version.txt -Value $env:GITHUB_REF_NAME -Encoding utf8
 
       - name: Vérification (--selftest)
         working-directory: dist/DCS-Copilote

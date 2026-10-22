@@ -5,11 +5,14 @@ import os
 
 DEFAULTS = {
     "llm": {
-        # Fournisseur actif : une des clés de "providers" (ollama, openai, gemini, grok, openrouter, custom)
-        "provider": "ollama",
+        # Fournisseur actif : une des clés de "providers" (groq, ollama, openai, gemini, grok, openrouter, custom).
+        # Groq par défaut : gratuit, rapide, une seule clé à coller (sert aussi à la reconnaissance vocale).
+        "provider": "groq",
         # Toutes ces API sont compatibles OpenAI (/chat/completions). api_key vide = variable
         # d'environnement api_key_env. Modèles disponibles : python main.py --models
         "providers": {
+            "groq": {"base_url": "https://api.groq.com/openai/v1", "api_key": "",
+                     "api_key_env": "GROQ_API_KEY", "model": "qwen/qwen3.8-27b"},
             "ollama": {"base_url": "http://localhost:11434/v1", "api_key": "ollama",
                        "model": "qwen2.5:14b"},
             "openai": {"base_url": "https://api.openai.com/v1", "api_key": "",
@@ -18,8 +21,6 @@ DEFAULTS = {
                        "api_key": "", "api_key_env": "GEMINI_API_KEY", "model": "gemini-2.5-flash"},
             "grok": {"base_url": "https://api.x.ai/v1", "api_key": "",
                      "api_key_env": "XAI_API_KEY", "model": "grok-4-fast-non-reasoning"},
-            "groq": {"base_url": "https://api.groq.com/openai/v1", "api_key": "",
-                     "api_key_env": "GROQ_API_KEY", "model": "llama-3.3-70b-versatile"},
             "openrouter": {"base_url": "https://openrouter.ai/api/v1", "api_key": "",
                            "api_key_env": "OPENROUTER_API_KEY", "model": "openai/gpt-4.1-mini"},
             "custom": {"base_url": "", "api_key": "", "model": ""},   # Open WebUI, LM Studio...
@@ -38,23 +39,23 @@ DEFAULTS = {
         "device": "cpu",           # "cpu" pour laisser le GPU à DCS, "cuda" si tu as de la marge en VRAM
         "compute_type": "int8",    # int8 (cpu) / float16 (cuda)
         "language": "fr",
-        "engine": "local",         # "local" (Whisper sur ce PC) ou "api" (en ligne, plus rapide)
+        "engine": "auto",          # "auto" (en ligne si une clé Groq/OpenAI est là, sinon local), "local" ou "api"
         "api_provider": "groq",    # groq / openai / custom
         "api_base": "",            # vide = préréglage du fournisseur
         "api_model": "",
-        "api_key": "",             # vide = variable GROQ_API_KEY / OPENAI_API_KEY (ou clé OpenAI de l'IA)
+        "api_key": "",             # vide = clé Groq / OpenAI de l'onglet IA, sinon GROQ_API_KEY / OPENAI_API_KEY
     },
     "tts": {
         "enabled": True,
-        "engine": "piper",         # "edge" (Microsoft, en ligne), "openai", "piper" (local) ou "system"
+        "engine": "edge",          # "edge" (Microsoft, en ligne), "openai", "piper" (local) ou "system"
         "edge_voice": "fr-FR-HenriNeural",
         "openai_voice": "ash",
         "openai_model": "gpt-4o-mini-tts",
         "openai_key": "",          # vide = clé OpenAI de l'onglet IA, sinon OPENAI_API_KEY
-        "piper_model": "voices/fr_FR-siwis-medium.onnx",
+        "piper_model": "voices/fr_FR-tom-medium.onnx",
         "speed": 1.1,              # >1 = plus rapide
         "speak_typed": False,
-        "radio": 0,                # effet radio sur la voix : 0 aucun, 1 léger, 2 radio, 3 fort      # lire aussi à voix haute les questions tapées
+        "radio": 3,                # effet radio sur la voix : 0 aucun, 1 léger, 2 radio, 3 fort      # lire aussi à voix haute les questions tapées
     },
     "audio": {
         "input_device": None,      # index ou nom (voir --devices), None = défaut
@@ -88,6 +89,7 @@ DEFAULTS = {
     "dcs": {
         "udp_port": 7779,
         "saved_games": "",         # dossier Saved Games/DCS (installation du script depuis les réglages)
+        "auto_install": True,      # proposer d'installer / mettre à jour le script au démarrage (False = refusé)
     },
     "overlay": {
         "enabled": True,
@@ -95,8 +97,22 @@ DEFAULTS = {
         "y": 40,
         "width": 560,
         "lines": 12,
-        "alpha": 0.88,
+        "alpha": 0.88,             # opacité du fond seul
+        "opacity": 1.0,            # opacité de tout l'overlay (texte compris)
         "font_size": 11,
+        "font_family": "",         # vide = police de l'interface
+        "bold": False,
+        "accent": "#34d399",       # couleur de la question, de l'étape de checklist, du bouton envoyer
+        "text_color": "#e8edf3",   # couleur des réponses
+        "bg_color": "#0e1116",
+        "show_header": True,       # appareil + boutons (masqué : réglages par clic droit ou zone de notification)
+        "show_question": True,
+        "show_actions": True,      # boutons Répéter / Détailler
+        "show_input": True,        # champ de question + micro
+        "show_status": True,
+        "autohide": 0,             # s sans activité avant de masquer l'overlay (0 = toujours visible)
+        "click_through": False,    # les clics traversent l'overlay jusqu'à DCS
+        "locked": False,           # position verrouillée
     },
 }
 

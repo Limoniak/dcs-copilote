@@ -45,8 +45,8 @@ class ApiSTT:
         self.base = (cfg.get("api_base") or preset.get("base_url", "")).rstrip("/")
         self.model = cfg.get("api_model") or preset.get("model", "")
         key = cfg.get("api_key") or ""
-        if not key and prov == "openai":           # même clé que l'onglet IA
-            key = (((llm_cfg or {}).get("providers") or {}).get("openai") or {}).get("api_key", "")
+        if not key and prov in ("groq", "openai"):   # même clé que l'onglet IA
+            key = (((llm_cfg or {}).get("providers") or {}).get(prov) or {}).get("api_key", "")
         self.key = key or os.environ.get(preset.get("api_key_env", ""), "")
         self.language = cfg.get("language") or None
         if not (self.base and self.model and self.key):

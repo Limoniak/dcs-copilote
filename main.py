@@ -9,7 +9,7 @@ Tous les réglages se font dans l'interface (bouton ⚙ de l'overlay). Commandes
   python main.py --ask "question"     teste la config IA sans micro
   python main.py --models             liste les modèles du fournisseur IA
   python main.py --provider gemini --model gemini-2.5-pro   change d'IA pour ce lancement
-  python main.py --download-voice fr_FR-siwis-medium   télécharge une voix Piper
+  python main.py --download-voice fr_FR-tom-medium   télécharge une voix Piper
 """
 import argparse
 import os

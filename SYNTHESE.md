@@ -40,7 +40,7 @@ Deux modes :
 dcs-copilote/
 ├── main.py                 Point d'entrée + commandes CLI (--bind, --devices, --ask, --models, --provider, --model, --download-voice)
 ├── requirements.txt
-├── install.bat / run.bat   Windows (venv, deps, voix Piper fr_FR-siwis-medium)
+├── install.bat / run.bat   Windows (venv, deps, voix Piper fr_FR-tom-medium)
 ├── install.sh  / run.sh    Linux
 ├── README.md               Guide utilisateur
 ├── SYNTHESE.md             Ce fichier
@@ -111,7 +111,7 @@ python main.py --devices               # micros / sorties / joysticks
 python main.py --ask "…" --aircraft "F-16C Viper"   # tester l'IA sans micro
 python main.py --models                # modèles du fournisseur IA actif
 python main.py --provider gemini --model gemini-2.5-pro   # changer d'IA pour un lancement
-python main.py --download-voice fr_FR-siwis-medium
+python main.py --download-voice fr_FR-tom-medium
 ```
 
 ## État des tests

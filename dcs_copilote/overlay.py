@@ -38,7 +38,7 @@ class DragArea(QWidget):
     """Zone qui déplace la fenêtre (déplacement natif : fonctionne aussi sous XWayland)."""
 
     def mousePressEvent(self, e):
-        if e.button() == Qt.LeftButton:
+        if e.button() == Qt.LeftButton and not self.window().property("locked"):
             handle = self.window().windowHandle()
             if handle is None or not handle.startSystemMove():
                 self._drag = e.globalPosition().toPoint() - self.window().pos()
@@ -72,13 +72,16 @@ class Overlay(QWidget):
         self.setWindowTitle("DCS Copilote")
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)   # réapparaître sans voler le focus à DCS
+        self._user_hidden = False
+        self._hide_timer = QTimer(self, singleShot=True, timeout=self._auto_hide)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(MARGIN + 12, MARGIN + 10, MARGIN + 12, MARGIN + 10)
         root.setSpacing(8)
 
         # ---- en-tête (déplaçable) : appareil + boutons
-        head = DragArea()
+        self.head = head = DragArea()
         hl = QHBoxLayout(head)
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setSpacing(2)
@@ -179,13 +182,15 @@ class Overlay(QWidget):
         self.cl_actions.hide()
         bl.addWidget(self.cl_actions)
 
-        irow = QHBoxLayout()
+        self.inputs = QWidget()
+        irow = QHBoxLayout(self.inputs)
+        irow.setContentsMargins(0, 0, 0, 0)
         irow.setSpacing(6)
         self.entry = QLineEdit()
         self.entry.setPlaceholderText("Une question pour ton copilote…")
         self.entry.setClearButtonEnabled(False)
-        send = self.entry.addAction(icon("send", ACCENT, 16), QLineEdit.TrailingPosition)
-        send.triggered.connect(self._submit)
+        self.send = self.entry.addAction(icon("send", ACCENT, 16), QLineEdit.TrailingPosition)
+        self.send.triggered.connect(self._submit)
         self.entry.returnPressed.connect(self._submit)
         irow.addWidget(self.entry, 1)
         self.mic = QToolButton()
@@ -197,11 +202,12 @@ class Overlay(QWidget):
         self.mic.pressed.connect(lambda: (self.mic.setIcon(icon("mic", LISTEN, 17)), self.on_mic_press()))
         self.mic.released.connect(lambda: (self.mic.setIcon(icon("mic", TEXT, 17)), self.on_mic_release()))
         irow.addWidget(self.mic)
-        bl.addLayout(irow)
+        bl.addWidget(self.inputs)
         root.addWidget(self.body)
 
         # ---- barre d'état (reste visible en mode réduit)
-        st = QHBoxLayout()
+        self.statusbar = QWidget()
+        st = QHBoxLayout(self.statusbar)
         st.setContentsMargins(0, 0, 0, 0)
         st.setSpacing(4)
         self.dot = ui.StatusDot()
@@ -209,7 +215,7 @@ class Overlay(QWidget):
         self.status.setProperty("muted", True)
         st.addWidget(self.dot)
         st.addWidget(self.status, 1)
-        root.addLayout(st)
+        root.addWidget(self.statusbar)
 
         self._render_timer = QTimer(self, interval=60, timeout=self._render)
         self._render_timer.start()
@@ -220,7 +226,7 @@ class Overlay(QWidget):
 
     # ------------------------------------------------------------------ dessin
     def paintEvent(self, _e):
-        ui.paint_card(self, MARGIN, RADIUS, self.cfg["alpha"])
+        ui.paint_card(self, MARGIN, RADIUS, self.cfg["alpha"], self.cfg.get("bg_color", ui.BASE))
 
     # ------------------------------------------------------------------ interne
     def _submit(self):
@@ -246,7 +252,35 @@ class Overlay(QWidget):
         self.tray.activated.connect(lambda r: r == QSystemTrayIcon.Trigger and self.toggle_visible())
         self.tray.show()
 
+    def contextMenuEvent(self, e):
+        """Clic droit : accès aux réglages même si l'en-tête est masqué."""
+        menu = QMenu(self)
+        menu.addAction("Réglages…", self.on_settings)
+        menu.addAction("Masquer l'overlay", self.toggle_visible)
+        menu.addSeparator()
+        menu.addAction("Quitter", self.on_quit)
+        menu.exec(e.globalPos())
+
+    def _wake(self):
+        """Activité (question, réponse, message) : réaffiche l'overlay masqué automatiquement."""
+        if self._user_hidden:
+            return
+        if not self.isVisible():
+            self.show()
+        delay = int(self.cfg.get("autohide", 0))
+        if delay:
+            self._hide_timer.start(delay * 1000)
+        else:
+            self._hide_timer.stop()
+
+    def _auto_hide(self):
+        if self.entry.hasFocus() or self.mic.isDown():
+            self._hide_timer.start(2000)        # question en cours de saisie : on attend
+        else:
+            self.hide()
+
     def toggle_visible(self):
+        self._user_hidden = self.isVisible()
         self.setVisible(not self.isVisible())
         if self.isVisible():
             self.raise_()
@@ -259,15 +293,16 @@ class Overlay(QWidget):
             n = len(steps)
             self.question.setText(f"Checklist — {title}  ·  étape {min(i + 1, n)}/{n}")
             self.question.show()
+            accent, fg = self.cfg.get("accent", ACCENT), self.cfg.get("text_color", TEXT)
             rows = []
             for k in range(max(0, i - 2), min(n, i + 4)):
                 step = html.escape(steps[k])
                 if k < i:
                     rows.append(f'<div style="color:{MUTED}">✓ {k + 1}. {step}</div>')
                 elif k == i:
-                    rows.append(f'<div style="color:{ACCENT}; font-weight:600; margin:4px 0">▶ {k + 1}. {step}</div>')
+                    rows.append(f'<div style="color:{accent}; font-weight:600; margin:4px 0">▶ {k + 1}. {step}</div>')
                 else:
-                    rows.append(f'<div style="color:{TEXT}">{k + 1}. {step}</div>')
+                    rows.append(f'<div style="color:{fg}">{k + 1}. {step}</div>')
             self._answer, self._dirty = "", False
             self.text.setHtml("".join(rows))
             self.text.show()
@@ -275,13 +310,14 @@ class Overlay(QWidget):
             self.cl_actions.show()
             self._notice("", MUTED)
             self._fit()
+            self._wake()
         self._call(f)
 
     def hide_checklist(self):
         self._call(lambda: (self.cl_actions.hide(), self.adjustSize()))
 
     def show_actions(self, on):
-        self._call(lambda: (self.actions.setVisible(on), self.adjustSize()))
+        self._call(lambda: (self.actions.setVisible(on and self.cfg.get("show_actions", True)), self.adjustSize()))
 
     def _set_speak_icon(self, on):
         self.btn_speak.setIcon(icon("volume" if on else "volume-off", ACCENT if on else MUTED, 16))
@@ -333,17 +369,38 @@ class Overlay(QWidget):
     # ------------------------------------------------------------------ API (appelable depuis tout thread)
     def apply_style(self, cfg):
         self.cfg = cfg
-        fs = float(cfg["font_size"])
-        f = QFont(self.font())
-        f.setPointSizeF(fs)
-        self.text.setFont(f)
+        accent, fg = cfg.get("accent", ACCENT), cfg.get("text_color", TEXT)
+        f = QFont(cfg.get("font_family") or self.font().family())
+        f.setPointSizeF(float(cfg["font_size"]))
+        f.setBold(bool(cfg.get("bold")))
+        for w in (self.text, self.entry, self.question):
+            w.setFont(f)
         self.text.document().setDefaultFont(f)
-        self.entry.setFont(f)
-        self.question.setStyleSheet(f"color: {ACCENT}; font-weight: 600; font-size: {fs}pt;")
+        self.text.setStyleSheet(f"QTextBrowser {{ background: transparent; border: none; color: {fg}; "
+                                "selection-background-color: rgba(52,211,153,0.35); selection-color: #e8edf3; }")
+        self.question.setStyleSheet(f"color: {accent}; font-weight: 600;")
         self.notice.setStyleSheet(f"color: {MUTED};")
+        self.send.setIcon(icon("send", accent, 16))
+        self.head.setVisible(cfg.get("show_header", True))
+        self.inputs.setVisible(cfg.get("show_input", True))
+        self.statusbar.setVisible(cfg.get("show_status", True))
+        if not cfg.get("show_question", True):
+            self.question.hide()
+        if not cfg.get("show_actions", True):
+            self.actions.hide()
+        self.setProperty("locked", bool(cfg.get("locked")))
+        self.setWindowOpacity(max(0.2, min(1.0, float(cfg.get("opacity", 1.0)))))
+        through = bool(cfg.get("click_through"))
+        if through != bool(self.windowFlags() & Qt.WindowTransparentForInput):
+            visible = self.isVisible()
+            self.setWindowFlag(Qt.WindowTransparentForInput, through)   # masque la fenêtre : on la réaffiche
+            if visible:
+                self.show()
         self.setFixedWidth(int(cfg["width"]) + 2 * MARGIN)
         self._dirty = True
         self.update()
+        QTimer.singleShot(0, self.adjustSize)
+        self._wake()
 
     def toggle(self):
         self.collapsed = not self.collapsed
@@ -358,6 +415,8 @@ class Overlay(QWidget):
             self.status.setStyleSheet(f"color: {ERROR if error else MUTED};")
             if error or state:
                 self.dot.set_state("error" if error else state)
+            if error or state in ("listen", "busy"):
+                self._wake()
         self._call(f)
 
     def set_aircraft(self, name, locked):
@@ -374,7 +433,7 @@ class Overlay(QWidget):
     def start_answer(self, question):
         def f():
             self.question.setText(question)
-            self.question.show()
+            self.question.setVisible(self.cfg.get("show_question", True))
             self.actions.hide()
             self.cl_actions.hide()
             self._answer = ""
@@ -391,6 +450,7 @@ class Overlay(QWidget):
             else:
                 self._answer += text
                 self._dirty = True
+            self._wake()
         self._call(f)
 
     def info(self, text):
@@ -400,6 +460,7 @@ class Overlay(QWidget):
         self._call(lambda: QTimer.singleShot(ms, fn))
 
     def hide_window(self):
+        self._user_hidden = True
         self._call(self.hide)
 
     def position(self):

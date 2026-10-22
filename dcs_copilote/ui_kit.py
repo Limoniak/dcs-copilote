@@ -7,12 +7,13 @@ import sys
 if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY") and os.environ.get("DISPLAY"):
     os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
-from PySide6.QtCore import (QByteArray, QEasingCurve, QObject, QPropertyAnimation, QRectF, Qt,  # noqa: E402
+from PySide6.QtCore import (QByteArray, QEasingCurve, QEvent, QObject, QPropertyAnimation, QRectF, Qt,  # noqa: E402
                             QVariantAnimation, Signal, Property)
-from PySide6.QtGui import (QColor, QFont, QFontDatabase, QIcon, QPainter, QPainterPath, QPen,  # noqa: E402
-                           QPixmap)
+from PySide6.QtGui import (QColor, QFont, QFontDatabase, QIcon, QPainter, QPainterPath, QPalette,  # noqa: E402
+                           QPen, QPixmap)
 from PySide6.QtSvg import QSvgRenderer  # noqa: E402
-from PySide6.QtWidgets import QAbstractButton, QApplication, QWidget  # noqa: E402
+from PySide6.QtWidgets import (QAbstractButton, QAbstractScrollArea, QAbstractSpinBox, QApplication, QComboBox,  # noqa: E402
+                               QSlider, QWidget)
 
 # --------------------------------------------------------------------------- couleurs
 BASE = "#0e1116"
@@ -49,8 +50,28 @@ def application():
         f.setHintingPreference(QFont.PreferNoHinting)
         app.setFont(f)
         app.setStyle("Fusion")
+        pal = app.palette()
+        pal.setColor(QPalette.Link, QColor(ACCENT))
+        app.setPalette(pal)
         app.setStyleSheet(STYLESHEET + _arrow_rule())
+        app._wheel_guard = _WheelGuard(app)
+        app.installEventFilter(app._wheel_guard)
     return app
+
+
+class _WheelGuard(QObject):
+    """La molette fait défiler la page au lieu de modifier listes, compteurs et curseurs survolés."""
+
+    def eventFilter(self, obj, event):
+        if event.type() != QEvent.Wheel or not isinstance(obj, (QComboBox, QAbstractSpinBox, QSlider)):
+            return False
+        # un événement renvoyé à la main ne remonte pas tout seul : on vise la zone défilante parente
+        p = obj.parentWidget()
+        while p and not isinstance(p, QAbstractScrollArea):
+            p = p.parentWidget()
+        if p:
+            QApplication.sendEvent(p.viewport(), event)
+        return True
 
 
 def single_instance():
@@ -115,8 +136,10 @@ def icon(name, color=MUTED, size=18, stroke=2.0):
     return QIcon(pm)
 
 
-def paint_card(widget, margin, radius=16, alpha=1.0):
+def paint_card(widget, margin, radius=16, alpha=1.0, color=BASE):
     """Fond de fenêtre sans bordure : carte arrondie + ombre douce dans la marge transparente."""
+    if alpha <= 0:          # fond invisible : texte seul, sans ombre ni bordure
+        return
     p = QPainter(widget)
     p.setRenderHint(QPainter.Antialiasing)
     card = QRectF(widget.rect()).adjusted(margin, margin, -margin, -margin)
@@ -126,8 +149,8 @@ def paint_card(widget, margin, radius=16, alpha=1.0):
         p.drawRoundedRect(card.adjusted(-i, -i + 4, i, i + 4), radius + i, radius + i)
     path = QPainterPath()
     path.addRoundedRect(card, radius, radius)
-    bg = QColor(BASE)
-    bg.setAlphaF(max(0.3, min(1.0, float(alpha))))
+    bg = QColor(color)
+    bg.setAlphaF(max(0.0, min(1.0, float(alpha))))
     p.fillPath(path, bg)
     p.setPen(QPen(QColor(255, 255, 255, 22), 1))
     p.drawPath(path)

@@ -1,6 +1,8 @@
 """Orchestration : PTT → micro → Whisper → LLM (streaming) → overlay + voix."""
 import copy
+import os
 import queue
+import re
 import threading
 import time
 from collections import deque
@@ -14,6 +16,7 @@ from .textutil import SentenceSplitter
 
 MIN_AUDIO_S = 0.35
 DCS_SCRIPT_VERSION = 2          # champ « v » envoyé par dcs/DCSAssistant.lua
+RELEASES_API = "https://api.github.com/repos/Limoniak/dcs-copilote/releases/latest"
 
 
 class App:
@@ -77,8 +80,12 @@ class App:
         threading.Thread(target=self._chucks_loop, daemon=True).start()
         threading.Thread(target=self._load_stt, daemon=True).start()
         threading.Thread(target=self._worker, daemon=True).start()
+        threading.Thread(target=self._dcs_watch, args=(first_run,), daemon=True).start()
+        threading.Thread(target=self._check_update, daemon=True).start()
 
-        if first_run or needs_key(cfg["llm"]):
+        if first_run:
+            self.overlay.later(500, self.open_wizard)
+        elif needs_key(cfg["llm"]):
             self.overlay.later(500, self.open_settings)
 
     # ------------------------------------------------------------------ réglages
@@ -189,6 +196,11 @@ class App:
             return
         self.settings_win = SettingsWindow(self)
 
+    def open_wizard(self):
+        """Premier lancement : 3 étapes (IA, bouton PTT, script DCS) au lieu de tous les réglages."""
+        from .wizard import Wizard
+        self.settings_win = Wizard(self)
+
     def apply_settings(self, new):
         """Enregistre la nouvelle config et l'applique sans redémarrer."""
         old, self.cfg = self.cfg, copy.deepcopy(new)
@@ -238,6 +250,101 @@ class App:
             self._load_stt()
         elif self.stt is not None:
             self._ready()
+
+    # ------------------------------------------------------------------ script DCS, mises à jour
+    def _ask(self, text, on_yes, on_no=None, yes="Oui", no="Non"):
+        """Question oui/non posée depuis n'importe quel thread ; la suite s'exécute hors de l'interface."""
+        def f():
+            from PySide6.QtCore import Qt
+            from PySide6.QtWidgets import QMessageBox
+            box = QMessageBox(QMessageBox.Question, "DCS Copilote", text)
+            box.setWindowFlag(Qt.WindowStaysOnTopHint)
+            ok = box.addButton(yes, QMessageBox.AcceptRole)
+            box.addButton(no, QMessageBox.RejectRole)
+            box.exec()
+            fn = on_yes if box.clickedButton() is ok else on_no
+            if fn:
+                threading.Thread(target=fn, daemon=True).start()
+        self.overlay._call(f)
+
+    def _dcs_folders(self):
+        from . import dcs_install
+        sg = self.cfg["dcs"].get("saved_games")
+        return [sg] if sg and os.path.isdir(sg) else dcs_install.candidates()
+
+    def _install_dcs(self, folders):
+        from . import dcs_install
+        for d in folders:
+            try:
+                self.overlay.info(dcs_install.install(d, int(self.cfg["dcs"]["udp_port"])))
+            except OSError as e:
+                self.log(f"Script DCS non installé dans {d} : {e}", error=True)
+        if folders and not self.cfg["dcs"].get("saved_games"):
+            self.cfg["dcs"]["saved_games"] = folders[0]
+            self._save_setting(("dcs", "saved_games"), folders[0])
+
+    def _refuse_dcs_install(self):
+        self.cfg["dcs"]["auto_install"] = False
+        self._save_setting(("dcs", "auto_install"), False)
+        self.overlay.info("D'accord. Le script s'installe aussi depuis ⚙ Réglages → DCS ; sans lui, choisis "
+                          "l'appareil dans le menu de l'overlay.")
+
+    def _dcs_watch(self, first_run):
+        """Au démarrage : met à jour le script DCS s'il est ancien et propose de l'installer s'il manque
+        (au premier lancement, c'est l'assistant qui s'en charge). Ensuite, signale une fois par session
+        DCS que DCS tourne sans rien envoyer."""
+        from . import dcs_install
+        port = int(self.cfg["dcs"]["udp_port"])
+        missing = []
+        for d in self._dcs_folders():
+            st = dcs_install.status(d, port)
+            if st == "outdated":
+                self._install_dcs([d])
+            elif st == "missing":
+                missing.append(d)
+        if missing and not first_run and self.cfg["dcs"].get("auto_install", True):
+            self._ask("Installer le script DCS ? Il donne au copilote l'appareil piloté et la situation de vol "
+                      "(altitude, vitesse, train…).\n\nIl est ajouté à Export.lua (sauvegardé en Export.lua.bak), "
+                      "compatible SRS, Tacview, Helios.\n\n" + "\n".join(missing),
+                      lambda: self._install_dcs(missing), self._refuse_dcs_install, yes="Installer", no="Non merci")
+        minutes = 0
+        while True:
+            time.sleep(60)
+            if self.dcs.snapshot() is not None or not dcs_install.dcs_running():
+                minutes = 0
+                continue
+            minutes += 1
+            port = int(self.cfg["dcs"]["udp_port"])
+            installed = any(dcs_install.status(d, port) == "ok" for d in self._dcs_folders())
+            if not installed and minutes == 1:
+                self.overlay.info("DCS est lancé mais mon script n'y est pas installé : je ne sais pas ce que tu "
+                                  "pilotes. ⚙ Réglages → DCS → « Installer », puis relance la mission.")
+            elif installed and minutes == 10:
+                self.overlay.info("DCS tourne depuis 10 min sans m'envoyer de données. Normal au menu ; en "
+                                  "mission, vérifie le dossier dans ⚙ Réglages → DCS et réinstalle le script.")
+
+    def _check_update(self):
+        """Version .exe : signale une Release GitHub plus récente et propose d'ouvrir sa page."""
+        try:
+            with open("version.txt", encoding="utf-8-sig") as f:    # écrit par la fabrication du .exe
+                cur = f.read().strip()
+        except OSError:
+            return                                              # lancé depuis les sources : git pull
+        import requests
+        try:
+            r = requests.get(RELEASES_API, timeout=10)
+            r.raise_for_status()
+            rel = r.json()
+        except (requests.RequestException, ValueError) as e:
+            print(f"[mise à jour] vérification impossible : {e}", flush=True)
+            return
+        tag = rel.get("tag_name", "")
+        if _version(tag) > _version(cur):
+            import webbrowser
+            self._ask(f"Nouvelle version {tag} disponible (tu as {cur}).\n\nTélécharge le .zip, puis "
+                      "décompresse-le par-dessus ce dossier : tes réglages et tes manuels sont conservés.",
+                      lambda: webbrowser.open(rel.get("html_url") or RELEASES_API), yes="Télécharger",
+                      no="Plus tard")
 
     # ------------------------------------------------------------------ utilitaires
     def log(self, msg, error=False):
@@ -430,7 +537,16 @@ class App:
     def _make_stt_api(self):
         from .stt import ApiSTT
         self.stt_api = None
-        if self.cfg["stt"].get("engine") == "api":
+        engine = self.cfg["stt"].get("engine")
+        if engine == "auto":                    # en ligne dès qu'une clé Groq ou OpenAI est disponible
+            for prov in ("groq", "openai"):
+                try:
+                    self.stt_api = ApiSTT(dict(self.cfg["stt"], api_provider=prov), self.cfg["llm"])
+                    print(f"Reconnaissance vocale en ligne ({prov}), Whisper local en secours", flush=True)
+                    return
+                except ValueError:
+                    pass
+        elif engine == "api":
             try:
                 self.stt_api = ApiSTT(self.cfg["stt"], self.cfg["llm"])
             except Exception as e:  # noqa: BLE001
@@ -748,3 +864,8 @@ class App:
 
     def run(self):
         self.overlay.mainloop()
+
+
+def _version(tag):
+    """« v1.2.10 » → (1, 2, 10), pour comparer les versions."""
+    return tuple(int(n) for n in re.findall(r"\d+", tag))

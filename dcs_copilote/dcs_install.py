@@ -31,6 +31,27 @@ def candidates():
     return out
 
 
+def _script(port):
+    with open(LUA_SRC, "r", encoding="utf-8") as f:
+        return re.sub(r"port = \d+", f"port = {int(port)}", f.read(), count=1)
+
+
+def _read(path):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def status(saved_games, port):
+    """« ok », « missing » (jamais installé) ou « outdated » (ancienne version ou autre port)."""
+    scripts = os.path.join(saved_games, "Scripts")
+    if "DCSAssistant.lua" not in _read(os.path.join(scripts, "Export.lua")):
+        return "missing"
+    return "ok" if _read(os.path.join(scripts, "DCSAssistant.lua")) == _script(port) else "outdated"
+
+
 def install(saved_games, port):
     """Copie le script (avec le port choisi) et l'ajoute à Export.lua. Renvoie un message."""
     if not saved_games or not os.path.isdir(saved_games):
@@ -38,11 +59,8 @@ def install(saved_games, port):
     scripts = os.path.join(saved_games, "Scripts")
     os.makedirs(scripts, exist_ok=True)
 
-    with open(LUA_SRC, "r", encoding="utf-8") as f:
-        lua = f.read()
-    lua = re.sub(r"port = \d+", f"port = {int(port)}", lua, count=1)
     with open(os.path.join(scripts, "DCSAssistant.lua"), "w", encoding="utf-8", newline="") as f:
-        f.write(lua)
+        f.write(_script(port))
 
     export = os.path.join(scripts, "Export.lua")
     content = ""
@@ -58,3 +76,16 @@ def install(saved_games, port):
             f.write("\n")
         f.write(EXPORT_LINE + "\n")
     return f"Script installé dans {scripts}. Relance la mission DCS."
+
+
+def dcs_running():
+    """Vrai si DCS (DCS.exe, ou sous Proton) tourne."""
+    import subprocess
+    try:
+        if sys.platform == "win32":
+            out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq DCS.exe", "/NH"], capture_output=True,
+                                 text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW).stdout
+            return "dcs.exe" in out.lower()
+        return subprocess.run(["pgrep", "-f", "DCS.exe"], capture_output=True, timeout=10).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
