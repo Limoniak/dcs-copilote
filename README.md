@@ -79,7 +79,7 @@ Fournisseurs d'IA proposés (tous via leur API compatible OpenAI) :
 
 | Fournisseur | Où obtenir la clé | Modèle par défaut |
 |---|---|---|
-| **Groq** (par défaut, gratuit) | console.groq.com/keys | `qwen/qwen3.8-27b` |
+| **Groq** (par défaut, gratuit) | console.groq.com/keys | `openai/gpt-oss-120b` (secours : `qwen/qwen3.8-27b`) |
 | Ollama (local) | aucune clé | `qwen2.5:14b` |
 | ChatGPT (OpenAI) | platform.openai.com/api-keys | `gpt-4.1-mini` |
 | Google Gemini | aistudio.google.com/apikey | `gemini-2.5-flash` |

@@ -51,7 +51,8 @@ RETRY_DELAYS = (1.0, 2.5)                     # court : on est en vol
 # 1 à 3 s de gagnées en vol. Un modèle qui refuse le paramètre est rappelé sans.
 # Valeurs essayées dans l'ordre : Gemini 2.5 accepte « none », Gemini 3 refuse de couper toute réflexion
 # (400 « invalid argument » sans préciser le paramètre) mais accepte « minimal » / « low ».
-FAST_EFFORT = {"gemini": ["none", "minimal", "low"], "openai": ["minimal", "low"], "grok": ["low"]}
+FAST_EFFORT = {"gemini": ["none", "minimal", "low"], "openai": ["minimal", "low"], "grok": ["low"],
+               "groq": ["low"]}     # gpt-oss : 1er mot en ~0,5 s en « low », ~8 s par défaut
 # paramètres acceptés par chaque modèle, appris au premier refus : (fournisseur, modèle) → (effort, température ?)
 # Retenus sur disque pour ne pas refaire les essais à chaque lancement.
 _ACCEPTED_PATH = os.path.join("data", "llm_params.json")

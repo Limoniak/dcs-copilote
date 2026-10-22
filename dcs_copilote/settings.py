@@ -39,8 +39,9 @@ FAST = {"mini", "flash", "fast", "lite", "haiku", "instant", "nano", "turbo", "s
 SLOW = {"pro", "opus", "large", "o1", "o3", "o4", "405b"}
 # Modèles conseillés, du meilleur au repli : le premier encore proposé par le fournisseur est « Conseillé »
 # (les fournisseurs retirent leurs modèles régulièrement). Sinon : le modèle par défaut de config.py.
-# Groq, mesuré en octobre 2026 : 1er mot en 0,3 s (qwen) et 0,6 s (gpt-oss-20b).
-RECOMMENDED = {"groq": ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"]}
+# Groq, comparé en octobre 2026 sur de vraies questions avec manuel : gpt-oss-120b (réflexion « low ») est
+# aussi rapide que qwen3.8-27b (1er mot ~0,5 s) mais invente bien moins (emplacements, indicatif).
+RECOMMENDED = {"groq": ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]}
 MODEL_KINDS = {
     "fast": "Rapide : idéal pour la voix en vol.",
     "general": "Polyvalent : correct en vol, à essayer avec « Tester l'IA ».",
@@ -967,7 +968,7 @@ class SettingsWindow(QWidget):
         self.e_sttkey.setPlaceholderText("vide = clé Groq / OpenAI de l'onglet IA")
         rec.add("Clé API", self.e_sttkey)
         self.e_sttmodel = rec.add("Modèle", QLineEdit(stt.get("api_model", "")))
-        self.e_sttmodel.setPlaceholderText("vide = whisper-large-v3-turbo (Groq) / gpt-4o-mini-transcribe (OpenAI)")
+        self.e_sttmodel.setPlaceholderText("vide = whisper-large-v3 (Groq) / gpt-4o-mini-transcribe (OpenAI)")
         self.e_sttbase = rec.add("Adresse", QLineEdit(stt.get("api_base", "")))
         self.e_sttbase.setPlaceholderText("vide = adresse du service choisi")
         self.cb_stt = rec.add("Modèle Whisper", _combo(WHISPER_MODELS, stt["model"], editable=True),

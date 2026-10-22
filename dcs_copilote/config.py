@@ -12,7 +12,9 @@ DEFAULTS = {
         # d'environnement api_key_env. Modèles disponibles : python main.py --models
         "providers": {
             "groq": {"base_url": "https://api.groq.com/openai/v1", "api_key": "",
-                     "api_key_env": "GROQ_API_KEY", "model": "qwen/qwen3.8-27b"},
+                     "api_key_env": "GROQ_API_KEY", "model": "openai/gpt-oss-120b",
+                     # quota gratuit par modèle (jetons/minute) : les secours prennent le relais
+                     "fallback_model": "qwen/qwen3.8-27b, openai/gpt-oss-20b"},
             "ollama": {"base_url": "http://localhost:11434/v1", "api_key": "ollama",
                        "model": "qwen2.5:14b"},
             "openai": {"base_url": "https://api.openai.com/v1", "api_key": "",

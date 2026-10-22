@@ -63,6 +63,29 @@ def dcs_install_candidates():
     return out
 
 
+# Manuels officiels livrés en plusieurs langues (« … Guide DE.pdf ») : seules les versions FR et EN servent,
+# les autres traductions doubleraient les passages donnés à l'IA (même page en allemand, russe, japonais…).
+LANG_TAG = re.compile(r"\s+(CN|CS|DE|EN|ES|FR|IT|JP|KO|PL|PT|RU|TR|UA|ZH)(\s*\(\d{4}\))?$", re.I)
+
+
+def keep_languages(names):
+    """Noms (sans .pdf) à garder : sans étiquette de langue, ou FR / EN ; une autre langue seulement si le
+    document n'existe dans aucune des deux."""
+    groups = {}
+    for n in names:
+        m = LANG_TAG.search(n)
+        groups.setdefault(n[:m.start()] if m else n, []).append((n, m.group(1).upper() if m else None))
+    keep = set()
+    for items in groups.values():
+        wanted = [n for n, lang in items if lang in (None, "FR", "EN")]
+        keep.update(wanted or [n for n, _lang in items])
+    return keep
+
+
+def _stem(path):
+    return re.sub(r"\.pdf$", "", os.path.basename(path), flags=re.I)
+
+
 def find_pdfs(dcs_dir, extra_dir, chucks=True):
     """[(chemin, module)] : manuels officiels (Mods/aircraft/<module>/Doc), Chuck's Guides téléchargés
     et PDF du dossier perso."""
@@ -78,7 +101,8 @@ def find_pdfs(dcs_dir, extra_dir, chucks=True):
     if extra_dir:
         for p in glob.glob(os.path.join(extra_dir, "**", "*.pdf"), recursive=True):
             out.append((p, os.path.splitext(os.path.basename(p))[0]))
-    return sorted(set(out))
+    keep = keep_languages({_stem(p) for p, _m in out})
+    return sorted({(p, m) for p, m in out if _stem(p) in keep})
 
 
 # --------------------------------------------------------------------------- indexation
@@ -239,6 +263,8 @@ class Manuals:
             self.tfs, self.df = tfs, df
             self.avg_len = sum(sum(t.values()) for t in tfs) / max(1, len(tfs))
             self.doc_of = np.array([c["doc"] for c in self.chunks])
+            keep = keep_languages({_stem(d["name"]) for d in self.docs})      # index fait avant ce tri
+            self.lang_ok = np.array([_stem(d["name"]) in keep for d in self.docs])
             self.ready = True
         return True
 
@@ -290,6 +316,7 @@ class Manuals:
             if docs == []:
                 return []                       # appareil connu mais aucun manuel indexé pour lui
             mask = np.ones(len(self.chunks), bool) if docs is None else np.isin(self.doc_of, docs)
+            mask &= self.lang_ok[self.doc_of]
             idx = np.flatnonzero(mask)
             q = np.asarray(next(iter(self.model.query_embed([query]))), dtype=np.float32)
             q /= np.linalg.norm(q) + 1e-9

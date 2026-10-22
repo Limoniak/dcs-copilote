@@ -32,6 +32,7 @@ class App:
         self.gen = 0
         self.gen_lock = threading.Lock()
         self.history = deque(maxlen=2 * int(cfg["llm"]["max_history"]))
+        self.turns = 0                         # réponses données (pour doser l'emploi de l'indicatif)
         self.manual_aircraft = None
         self.dcs_aircraft = None
         self.stt = None
@@ -705,7 +706,7 @@ class App:
                     if gen != self.gen:
                         continue
                     self.lat = {"gen": gen, "t0": t0, "stt": time.monotonic() - t0, "stt_engine": engine}
-                    if not question:
+                    if not re.search(r"\w{2}", question):   # silence ou bruit transcrit en « . » / « ... »
                         self._beep(2)
                         self.overlay.set_status("Je n'ai rien compris, réessaie", state="ready")
                         continue
@@ -824,7 +825,9 @@ class App:
         manual, sources = self._manual_context(question)
         messages = [{"role": "system", "content": system_prompt(
             self.current_aircraft(), flight, mode, self.cfg["llm"].get("answer_length", "courte"),
-            self.cfg["llm"].get("custom_prompt", ""), manual, self.cfg["llm"].get("callsign", ""))}]
+            self.cfg["llm"].get("custom_prompt", ""), manual, self.cfg["llm"].get("callsign", ""),
+            address=self.turns % 4 == 0)}]                 # indicatif : 1re réponse puis une sur quatre
+        self.turns += 1
         messages += list(self.history)
         messages.append({"role": "user", "content": question})
 

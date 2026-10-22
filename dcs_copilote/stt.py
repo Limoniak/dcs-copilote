@@ -6,9 +6,12 @@ import wave
 import numpy as np
 
 # Vocabulaire aviation : aide Whisper à orthographier correctement les termes
-PROMPT = ("Question à un instructeur DCS World : HUD, MFD, DDI, UFC, HOTAS, TMS, DMS, CMS, Master Arm, "
-          "TACAN, ILS, ICLS, INS, GPS, waypoint, AMRAAM, Sidewinder, Maverick, JDAM, TGP, FLIR, radar, "
-          "IFF, datalink, APU, throttle, trim, flaps, crosswind, ravitaillement, appontage.")
+# (Whisper n'en lit que ~220 jetons : les termes les plus souvent mal entendus d'abord, les armes surtout)
+PROMPT = ("Question à un instructeur DCS World : GBU-12, GBU-38, GBU-31, JDAM, AIM-9X, AIM-120, AIM-7, "
+          "Sidewinder, AMRAAM, Sparrow, AGM-65 Maverick, AGM-88 HARM, Harpoon, Mk-82, CBU, roquettes, "
+          "SAM, SEAD, CAS, JTAC, AWACS, bandit, bogey, code laser, TGP, Litening, ATFLIR, FLIR, CCIP, CCRP, "
+          "HUD, MFD, DDI, UFC, HOTAS, TDC, TMS, DMS, CMS, Master Arm, TACAN, ILS, ICLS, INS, GPS, waypoint, "
+          "radar, RWR, IFF, datalink, APU, throttle, trim, flaps, ravitaillement, appontage.")
 
 
 class STT:
@@ -28,8 +31,9 @@ class STT:
 
 
 STT_PROVIDERS = {
-    # Groq : Whisper large très rapide (~0,3 s), offre gratuite ; OpenAI : payant, très bon
-    "groq": {"base_url": "https://api.groq.com/openai/v1", "model": "whisper-large-v3-turbo",
+    # Groq : Whisper large, offre gratuite ; la version complète comprend bien mieux les termes militaires
+    # que la « turbo » (GBU-12, pod Litening…) pour ~0,1 s de plus. OpenAI : payant, très bon
+    "groq": {"base_url": "https://api.groq.com/openai/v1", "model": "whisper-large-v3",
              "api_key_env": "GROQ_API_KEY"},
     "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini-transcribe",
                "api_key_env": "OPENAI_API_KEY"},
