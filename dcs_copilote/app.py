@@ -88,6 +88,37 @@ class App:
             self.log(f"IA : {e}", error=True)
             return None
 
+    def _persist_replacements(self):
+        """Modèle retiré par le fournisseur et remplacé (conseil du fournisseur) : on met à jour les
+        réglages pour ne pas le redécouvrir à chaque lancement."""
+        from . import llm as llm_mod
+        prov = self.cfg["llm"]["provider"]
+        pcfg = self.cfg["llm"]["providers"].get(prov, {})
+        changes = {}
+        model = pcfg.get("model", "")
+        if (prov, model) in llm_mod._replaced:
+            changes["model"] = llm_mod._replaced[(prov, model)]
+        fb = [m.strip() for m in str(pcfg.get("fallback_model") or "").split(",") if m.strip()]
+        new_fb = [llm_mod._replaced.get((prov, m), m) for m in fb]
+        new_fb = [m for i, m in enumerate(new_fb) if m not in new_fb[:i] and m != changes.get("model", model)]
+        if new_fb != fb:
+            changes["fallback_model"] = ", ".join(new_fb)
+        if not changes:
+            return
+        pcfg.update(changes)
+        try:
+            disk = cfgmod.load(self.cfg_path)
+            disk["llm"]["providers"].setdefault(prov, {}).update(changes)
+            cfgmod.save(self.cfg_path, disk)
+        except (OSError, ValueError) as e:
+            print(f"[IA] réglage non enregistré : {e}", flush=True)
+            return
+        self.llm = self._make_llm()
+        if "model" in changes:
+            msg = f"Modèle {model} retiré par {self.llm.name if self.llm else prov} : remplacé par {changes['model']} dans tes réglages."
+            print(f"[IA] {msg}", flush=True)
+            self.overlay.info(msg)
+
     def _stream(self, messages, gen, fast):
         """Réponse de l'IA ; si le fournisseur est à court de quota ou en panne, le fournisseur de
         secours (Réglages → IA) prend le relais pour cette question."""
@@ -96,6 +127,7 @@ class App:
         alive = lambda: gen == self.gen  # noqa: E731
         try:
             yield from self.llm.stream(messages, alive=alive, fast=fast, on_retry=self._on_retry)
+            self._persist_replacements()
             return
         except LLMError as e:
             backup = self.cfg["llm"].get("fallback_provider")

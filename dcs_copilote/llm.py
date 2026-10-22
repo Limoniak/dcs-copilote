@@ -243,8 +243,7 @@ class LLMClient:
                     if rec and rec.group(1) not in usable and rec.group(1) != model:
                         _replaced[(prov, model)] = rec.group(1)
                         usable.insert(i, rec.group(1))
-                        print(f"[IA] {model} retiré par {self.name} → {rec.group(1)} (à mettre comme modèle "
-                              f"dans ⚙ Réglages → IA)", flush=True)
+                        print(f"[IA] {model} retiré par {self.name} → {rec.group(1)}", flush=True)
                     else:
                         _exhausted[(prov, model)] = time.monotonic() + 12 * 3600
                     break
