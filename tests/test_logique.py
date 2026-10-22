@@ -91,6 +91,25 @@ def test_historique_markdown(tmp_path, monkeypatch):
     assert "*F/A-18C Hornet · Sources : Guide EN p. 57*" in text and "*F/A-18C Hornet*" in text
 
 
+GUIDES = {"a-10c": "A-10C Warthog", "av-8b": "AV-8B N/A Harrier II", "f-14b": "F-14B Tomcat",
+          "f-15e": "F-15E Strike Eagle", "f-16cm": "F-16CM Viper", "fa-18c": "F/A-18C Hornet", "jf-17": "JF-17 Thunder",
+          "m-2000c": "Mirage 2000C", "mig-21bis": "Mig-21bis", "ka-50": "Ka-50 Black Shark", "ah-64d": "AH-64D Apache",
+          "p-51d": "P-51D Mustang", "uh-1h": "UH-1H Huey", "mi-8": "Mi-8MTV2"}
+
+
+def test_guide_de_chuck_pour_chaque_appareil(tmp_path):
+    from dcs_copilote import chucks
+    from dcs_copilote.aircraft import pretty
+    expected = {"FA-18C_hornet": "fa-18c", "M-2000C": "m-2000c", "F-16C_50": "f-16cm", "A-10C_2": "a-10c",
+                "AV8BNA": "av-8b", "Ka-50_3": "ka-50", "AH-64D_BLK_II": "ah-64d", "MiG-21Bis": "mig-21bis",
+                "F-15ESE": "f-15e", "Mi-8MT": "mi-8", "Su-25T": None}
+    assert {a: chucks.slug_for(pretty(a), GUIDES) for a in expected} == expected
+    assert chucks.slug_for("Mirage 2000C", GUIDES) == "m-2000c"           # choisi dans le menu de l'overlay
+    for folder in ("FA-18C", "M-2000C", "F-16C", "AV8BNA", "Su-25T", "Uh-1H"):
+        (tmp_path / "Mods" / "aircraft" / folder).mkdir(parents=True)
+    assert sorted(chucks.installed_slugs(GUIDES, str(tmp_path))) == ["av-8b", "f-16cm", "fa-18c", "m-2000c", "uh-1h"]
+
+
 # ------------------------------------------------------------------ voix, checklist
 def test_decoupage_des_phrases_pour_la_voix():
     s = SentenceSplitter()
