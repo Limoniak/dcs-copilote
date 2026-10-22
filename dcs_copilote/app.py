@@ -364,7 +364,7 @@ class App:
     def on_dcs(self, state):
         if state and int(state.get("v", 1)) < DCS_SCRIPT_VERSION and not self.warned_old_script:
             self.warned_old_script = True
-            self.overlay.info("Script DCS ancien : ⚙ Réglages → DCS → « Installer » pour donner à l'instructeur "
+            self.overlay.info("Script DCS ancien : ⚙ Réglages → DCS → « Installer » pour donner au copilote "
                               "cap, incidence, carburant, train, volets…")
         name = state.get("aircraft") if state else None
         if name == self.dcs_aircraft:
@@ -491,7 +491,8 @@ class App:
         cmd = cl.command(question) if self.checklist is not None else None
         if cmd:
             self.checklist_cmd(cmd)
-        elif self.last_answer and cl.is_detail(question):
+        elif self.last_answer and (cl.is_detail(question) or
+                                   ("détaille" in self.last_answer.lower() and cl.is_yes(question))):
             self._answer("Détaille ta réponse précédente : toutes les étapes et les explications utiles.",
                          "sol", speak, gen)
         elif cl.is_start(question):
@@ -506,7 +507,8 @@ class App:
         self.overlay.set_status("Préparation de la checklist…", state="busy")
         manual, sources = self._manual_context(question)
         system = system_prompt(self.current_aircraft(), self.dcs.snapshot(), "sol",
-                               custom=self.cfg["llm"].get("custom_prompt", ""), manual=manual)
+                               custom=self.cfg["llm"].get("custom_prompt", ""), manual=manual,
+                               callsign=self.cfg["llm"].get("callsign", ""))
         messages = [{"role": "system", "content": system + "\n\n" + cl.PROMPT},
                     {"role": "user", "content": question}]
         try:
@@ -581,7 +583,7 @@ class App:
         manual, sources = self._manual_context(question)
         messages = [{"role": "system", "content": system_prompt(
             self.current_aircraft(), flight, mode, self.cfg["llm"].get("answer_length", "courte"),
-            self.cfg["llm"].get("custom_prompt", ""), manual)}]
+            self.cfg["llm"].get("custom_prompt", ""), manual, self.cfg["llm"].get("callsign", ""))}]
         messages += list(self.history)
         messages.append({"role": "user", "content": question})
 

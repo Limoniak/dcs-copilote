@@ -34,6 +34,14 @@ def is_detail(text):
     return bool(_DETAIL.fullmatch(_plain(text)))
 
 
+_YES = re.compile(r"(oui|ouais|vas[- ]y|go|ok|d'accord|oui vas[- ]y|ouais vas[- ]y|je veux bien|volontiers)( stp| s'il te plait)?")
+
+
+def is_yes(text):
+    """« oui », « vas-y »… : accepte la proposition « Je te détaille si tu veux. »"""
+    return bool(_YES.fullmatch(_plain(text)))
+
+
 def command(text):
     """'next' / 'prev' / 'repeat' / 'stop' si le texte est une commande courte de checklist, sinon None."""
     t = _plain(text)

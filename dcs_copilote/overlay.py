@@ -182,7 +182,7 @@ class Overlay(QWidget):
         irow = QHBoxLayout()
         irow.setSpacing(6)
         self.entry = QLineEdit()
-        self.entry.setPlaceholderText("Pose une question à l'instructeur…")
+        self.entry.setPlaceholderText("Une question pour ton copilote…")
         self.entry.setClearButtonEnabled(False)
         send = self.entry.addAction(icon("send", ACCENT, 16), QLineEdit.TrailingPosition)
         send.triggered.connect(self._submit)

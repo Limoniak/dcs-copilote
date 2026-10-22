@@ -382,7 +382,7 @@ def _edge_locale_patch(voice):
 class OpenAITTS:
     """Synthèse OpenAI (/v1/audio/speech, PCM 24 kHz) : excellente qualité, payante, clé OpenAI requise."""
 
-    INSTRUCTIONS = ("Tu es un instructeur de vol français : voix calme, posée et assurée, "
+    INSTRUCTIONS = ("Tu es le copilote français du pilote, à la radio de bord : voix calme, posée et assurée, "
                     "débit légèrement rapide, prononciation claire des termes techniques.")
 
     def __init__(self, api_key, voice="ash", model="gpt-4o-mini-tts", speed=1.0):

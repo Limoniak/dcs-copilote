@@ -28,7 +28,8 @@ DEFAULTS = {
         "temperature": 0.3,
         "answer_length": "courte",
         "fast": True,                # en vol : limiter la « réflexion » du modèle (réponse plus rapide)   # réponses vocales : tres_courte / courte / detaillee
-        "custom_prompt": "",         # consignes ajoutées au prompt système (réglages → IA)
+        "custom_prompt": "",
+        "callsign": "",              # indicatif du pilote, utilisé de temps en temps par le copilote         # consignes ajoutées au prompt système (réglages → IA)
         "max_history": 6,          # nombre d'échanges question/réponse gardés en contexte
         "timeout": 120,
     },

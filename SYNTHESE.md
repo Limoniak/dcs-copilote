@@ -20,7 +20,7 @@ Assistant IA d'apprentissage pour DCS World. On maintient un bouton (clavier ou 
 appui PTT ──► bip + Recorder.start()          (annule réponse/voix en cours)
 relâche   ──► Recorder.stop() ─► file jobs
 worker    ──► STT.transcribe() ─► App._answer()
-               ├─ prompt système = rôle instructeur + appareil + données de vol + mode (vol/sol)
+               ├─ prompt système = rôle de copilote (ton d'équipier, indicatif) + appareil + données de vol + mode (vol/sol)
                ├─ + historique (6 échanges)
                └─ LLMClient.stream() ─► morceaux de texte
                     ├─► Overlay.append()            (affichage au fil de l'eau)

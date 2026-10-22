@@ -34,7 +34,7 @@ ENGINES = [("edge", "Microsoft"), ("openai", "OpenAI"), ("piper", "Piper"), ("sy
 ENGINE_HINTS = {
     "edge": "Voix neuronales très naturelles, gratuites, sans clé. Service en ligne non officiel : "
             "s'il ne répond plus, Piper prend le relais automatiquement.",
-    "openai": "Qualité excellente, ton d'instructeur. Payant, clé OpenAI requise. Repli sur Piper en cas d'échec.",
+    "openai": "Qualité excellente, ton d'équipier. Payant, clé OpenAI requise. Repli sur Piper en cas d'échec.",
     "piper": "Local et hors-ligne, rapide, mais voix plus synthétique.",
     "system": "Voix du système (SAPI / espeak) : dernier recours, très robotique.",
 }
@@ -374,7 +374,7 @@ class SettingsWindow(QWidget):
     # ------------------------------------------------------------------ IA
     def _page_llm(self):
         w, lay = self._page("Intelligence artificielle",
-                            "Le modèle qui joue l'instructeur. Toutes ces API sont compatibles OpenAI.")
+                            "Le modèle qui joue ton copilote. Toutes ces API sont compatibles OpenAI.")
         llm = self.c["llm"]
         self.provider = llm.get("provider", "ollama")
 
@@ -446,11 +446,14 @@ class SettingsWindow(QWidget):
             [("tres_courte", "Très courtes"), ("courte", "Courtes"), ("detaillee", "Détaillées")],
             llm.get("answer_length", "courte")), "1 phrase · 2-3 phrases · jusqu'à 6. Toujours 15 mots max par "
                                                  "phrase.", stretch=False)
+        self.e_callsign = QLineEdit(llm.get("callsign", ""))
+        self.e_callsign.setPlaceholderText("ex. Viper 1, Maverick…")
+        adv.add("Ton indicatif", self.e_callsign, "Le copilote t'appelle ainsi de temps en temps, comme à la radio.")
         self.e_custom = QPlainTextEdit(llm.get("custom_prompt", ""))
-        self.e_custom.setPlaceholderText("Ex. : Tutoie-moi. Donne les distances en kilomètres. "
-                                         "Je débute sur le Hornet, explique les acronymes.")
+        self.e_custom.setPlaceholderText("Ex. : Donne les distances en kilomètres. Je débute sur le Hornet, "
+                                         "explique les acronymes.")
         self.e_custom.setFixedHeight(84)
-        adv.add("Consignes personnelles", self.e_custom, "Ajoutées au prompt de l'instructeur, prioritaires.")
+        adv.add("Consignes personnelles", self.e_custom, "Ajoutées aux consignes du copilote, prioritaires.")
         self.s_temp = adv.add("Créativité (température)", Slider(0, 20, float(llm["temperature"]) * 10,
                                                                  lambda v: f"{v / 10:.1f}"),
                               "Bas = réponses plus factuelles.")
@@ -555,7 +558,7 @@ class SettingsWindow(QWidget):
         trow = QHBoxLayout()
         b = QPushButton("Tester une alerte")
         b.setIcon(icon("bell", TEXT, 15))
-        b.clicked.connect(lambda: self.app.speaker.alert("Attention, train rentré en approche !"))
+        b.clicked.connect(lambda: self.app.speaker.alert("Train rentré, on est en approche !"))
         trow.addWidget(b)
         trow.addStretch(1)
         lay.addLayout(trow)
@@ -568,7 +571,7 @@ class SettingsWindow(QWidget):
     # ------------------------------------------------------------------ Manuels
     def _page_manuals(self):
         from .manuals import dcs_install_candidates
-        w, lay = self._page("Manuels", "L'instructeur s'appuie sur les manuels PDF de tes modules : réponses "
+        w, lay = self._page("Manuels", "Le copilote s'appuie sur les manuels PDF de tes modules : réponses "
                                         "bien plus fiables, avec la page source.")
         m = self.c["manuals"]
         card = Card("Sources")
@@ -1240,7 +1243,7 @@ class SettingsWindow(QWidget):
         self._store_provider()
         c["llm"]["fallback_provider"] = self._backup_keys.get(self.cb_backup.currentText(), "")
         c["llm"].update(answer_length=self.seg_len.value() or "courte", fast=self.t_fast.isChecked(),
-                        custom_prompt=self.e_custom.toPlainText().strip(),
+                        custom_prompt=self.e_custom.toPlainText().strip(), callsign=self.e_callsign.text().strip(),
                         temperature=self.s_temp.value() / 10, max_history=self.s_hist.value(),
                         timeout=self.s_timeout.value())
         c["stt"].update(engine=self.seg_stt.value() or "local", api_provider=self.cb_sttp.currentText().strip(),

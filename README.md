@@ -1,6 +1,6 @@
 # DCS Copilote
 
-Instructeur IA pour DCS World (Windows / Linux). Tu maintiens un bouton (clavier ou HOTAS), tu poses ta question à voix haute, la réponse s'affiche dans un overlay et est lue au casque. L'appareil piloté est détecté automatiquement via `Export.lua`.
+Ton copilote vocal pour DCS World (Windows / Linux) : il te parle comme un équipier dans le cockpit. Tu maintiens un bouton (clavier ou HOTAS), tu poses ta question à voix haute, la réponse s'affiche dans un overlay et est lue au casque. L'appareil piloté est détecté automatiquement via `Export.lua`.
 
 ```
 [bouton PTT] → micro → Whisper (local) → LLM compatible OpenAI (streaming) → overlay + Piper (voix locale)

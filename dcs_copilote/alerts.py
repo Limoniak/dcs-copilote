@@ -46,24 +46,24 @@ def evaluate(rule, f, ctx):
     heli = ctx["heli"]
     if rule == "gear_approach" and not heli and None not in (agl, vs, gear):
         if gear < 0.05 and agl * M_TO_FT < 1000 and vs * MS_TO_FPM < -500 and ias < 175:
-            return "Attention, train rentré en approche !"
+            return "Train rentré, on est en approche !"
     elif rule == "sink_rate" and None not in (agl, vs):
         if agl * M_TO_FT < 500 and vs * MS_TO_FPM < -2500:
-            return "Taux de chute élevé près du sol, remonte !"
+            return "On descend trop vite, on est bas, redresse !"
     elif rule == "gear_speed" and not heli and gear is not None:
         if gear > 0.5 and ias > 260:
-            return f"Train sorti à {ias:.0f} nœuds, attention à la vitesse limite."
+            return f"Train sorti à {ias:.0f} nœuds, réduis !"
     elif rule == "flaps_speed" and not heli and flaps is not None:
         if flaps > 0.2 and ias > 260:
-            return f"Volets sortis à {ias:.0f} nœuds, attention à la vitesse limite."
+            return f"Volets sortis à {ias:.0f} nœuds, réduis !"
     elif rule == "low_fuel":
         fuel = _num(f, "fuel_kg")
         if fuel is not None and ctx["max_fuel"] > 300 and fuel < 0.15 * ctx["max_fuel"]:
-            return f"Carburant bas : {fuel:,.0f} kilos.".replace(",", " ")
+            return f"Carburant bas, il nous reste {fuel:,.0f} kilos.".replace(",", " ")
     elif rule == "g_load" and not heli:
         g = _num(f, "g")
         if g is not None and (g > 8 or g < -2.5):
-            return f"Facteur de charge {g:.1f} G."
+            return f"{g:.1f} G, doucement sur le manche."
     return None
 
 
