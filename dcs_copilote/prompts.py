@@ -17,12 +17,17 @@ SPOKEN_STYLE = """Style oral :
 - Mets chaque nom anglais du cockpit entre guillemets « », par exemple « Master Arm » ou « TMS Up » ; jamais de guillemets autour de mots français."""
 
 VOL_LENGTH = {
-    "tres_courte": "Une seule phrase, la plus utile maintenant.",
-    "courte": "2 à 3 phrases, directement actionnables. Pour une procédure longue, donne seulement "
-              "les 3 premières étapes puis propose la suite.",
-    "detaillee": "Jusqu'à 6 phrases. Pour une procédure longue, donne les étapes une par phrase, "
-                 "puis propose la suite.",
+    "tres_courte": "Une ou deux phrases : l'essentiel.",
+    "courte": "3 à 4 phrases.",
+    "detaillee": "Jusqu'à 7 phrases.",
 }
+
+# Réponse complète même en peu de phrases : le pilote veut savoir FAIRE, pas seulement commencer
+COMPLETE = """Réponds à toute la question :
+- « Comment utiliser / employer / tirer » un système ou une arme : donne l'enchaînement complet en résumé
+  (préparation et sélection, réglages ou mode, visée ou désignation, tir ou emploi), une étape clé par phrase.
+  Ne t'arrête jamais après la sélection.
+- Si tout ne tient pas dans la longueur demandée, termine par une phrase courte : « Dis "détaille" pour le pas à pas. »"""
 
 MODE_SOL = """Le pilote lit ta réponse à l'écran, au sol ou en pause :
 - Réponse complète et structurée, étapes numérotées pour une procédure.
@@ -83,7 +88,7 @@ def system_prompt(aircraft, flight, mode, length="courte", custom="", manual="")
         parts.append(flight_situation(flight))
     if mode == "vol":
         parts.append("Le pilote est EN VOL et écoute ta réponse au casque.\n"
-                     f"Longueur : {VOL_LENGTH.get(length, VOL_LENGTH['courte'])}\n\n{SPOKEN_STYLE}")
+                     f"Longueur : {VOL_LENGTH.get(length, VOL_LENGTH['courte'])}\n\n{COMPLETE}\n\n{SPOKEN_STYLE}")
     else:
         parts.append(MODE_SOL)
     if manual:

@@ -470,6 +470,9 @@ class App:
         cmd = cl.command(question) if self.checklist is not None else None
         if cmd:
             self.checklist_cmd(cmd)
+        elif self.last_answer and cl.is_detail(question):
+            self._answer("Détaille ta réponse précédente : toutes les étapes et les explications utiles.",
+                         "sol", speak, gen)
         elif cl.is_start(question):
             self._start_checklist(question, gen)
         else:

@@ -25,6 +25,15 @@ def is_start(question):
     return bool(_START.search(_plain(question)))
 
 
+_DETAIL = re.compile(r"(detaille|detailles|details?|plus de details?|la suite|et (la suite|apres)|"
+                     r"explique (plus|mieux)|en detail)( stp| s'il te plait)?")
+
+
+def is_detail(text):
+    """« détaille », « la suite », « plus de détails »… : version complète de la réponse précédente."""
+    return bool(_DETAIL.fullmatch(_plain(text)))
+
+
 def command(text):
     """'next' / 'prev' / 'repeat' / 'stop' si le texte est une commande courte de checklist, sinon None."""
     t = _plain(text)

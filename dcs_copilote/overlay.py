@@ -131,7 +131,8 @@ class Overlay(QWidget):
         self.text.setOpenExternalLinks(True)
         self.text.setFrameShape(QTextBrowser.NoFrame)
         self.text.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.text.setStyleSheet("QTextBrowser { background: transparent; border: none; }")
+        self.text.setStyleSheet("QTextBrowser { background: transparent; border: none; "
+                                "selection-background-color: rgba(52,211,153,0.35); selection-color: #e8edf3; }")
         self.text.document().setDocumentMargin(0)
         self.text.hide()
         bl.addWidget(self.text)
