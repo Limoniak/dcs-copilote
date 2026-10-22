@@ -472,6 +472,7 @@ class App:
     def more(self):
         """Bouton « Détailler » : réponse complète à la question précédente (mode sol)."""
         if self.last_answer:
+            print("[question] (bouton Détailler)", flush=True)
             gen = self._new_gen()
             self.speaker.stop()
             self.jobs.put(("detail", "Détaille ta réponse précédente : toutes les étapes et les explications utiles.",
@@ -563,7 +564,8 @@ class App:
         self.checklist = cl.Checklist(title[:1].upper() + title[1:], steps)
         self.history.append({"role": "user", "content": question})
         self.history.append({"role": "assistant", "content": "\n".join(f"{n}. {s}" for n, s in enumerate(steps, 1))})
-        print(f"[checklist] {title} : {len(steps)} étapes", flush=True)
+        print(f"[checklist] {title} : {len(steps)} étapes\n" + "\n".join(f"  {n}. {s}" for n, s in enumerate(steps, 1)),
+              flush=True)
         self._show_step(first=True)
         if sources:
             self.overlay.info(sources)
@@ -649,6 +651,8 @@ class App:
             for s in splitter.flush():
                 self.speaker.say(s, gen)
         answer = "".join(full).strip()
+        model = self.llm.cfg["model"] if self.llm else "?"
+        print(f"[réponse · {model}]{' (' + sources + ')' if sources else ' (sans manuel)'}\n{answer}", flush=True)
         if answer:
             self.history.append({"role": "user", "content": question})
             self.history.append({"role": "assistant", "content": answer})
