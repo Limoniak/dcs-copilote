@@ -42,26 +42,43 @@ FR_EN = [(r"décoll\w*", "airfield takeoff"), (r"atterri\w*", "airfield landing"
          (r"carburant", "fuel"), (r"\bmoteurs?\b", "engine"), (r"\bbombes?\b", "bomb"), (r"\bcanon\b", "gun"),
          (r"\bleurres?\b", "countermeasures"), (r"procédure", "procedure"), (r"désign\w*", "designate"),
          (r"verrouill\w*", "lock"), (r"\blargu\w*", "release"), (r"pilote automatique", "autopilot"),
-         (r"\bthermiques?\b|infrarouges?", "IR"), (r"\bpanne\b", "failure"), (r"\bréglage\b|\bconfigurer\b", "set up")]
+         (r"\bthermiques?\b|infrarouges?", "IR"), (r"\bpanne\b", "failure"), (r"\brégl\w*|\bconfigur\w*", "set up")]
 
 
 TOC = re.compile(r"\.{6,}\s*\d+")
 
 
-def english_queries(question):
-    """Versions anglaises de la question : la phrase aux termes clés traduits, et ces termes seuls avec les noms
-    techniques (GBU-12, Maverick, APU…). Vide si aucun terme n'est traduit."""
+def _translated(question):
+    """([(position, terme anglais)], phrase aux termes traduits)."""
     found, sentence = [], question
     carrier = re.search(r"porte-avions|appont|catapult|CVN", question, flags=re.I)
     for pat, en in FR_EN:
         en = en.replace("airfield", "carrier") if carrier else en
         found += [(m.start(), en) for m in re.finditer(pat, question, flags=re.I)]
         sentence = re.sub(pat, en, sentence, flags=re.I)
+    return found, sentence
+
+
+def _technical(question):
+    """Noms techniques de la question (GBU-12, Maverick, APU…) : majuscule ou chiffre, hors premier mot."""
+    return [(m.start(), m.group()) for m in re.finditer(r"\b[\w-]*(?:[A-Z]|\d)[\w-]*\b", question) if m.start() > 0]
+
+
+def english_queries(question):
+    """Versions anglaises de la question : la phrase aux termes clés traduits, et ces termes seuls avec les noms
+    techniques. Vide si aucun terme n'est traduit."""
+    found, sentence = _translated(question)
     if not found:
         return []
-    technical = [(m.start(), m.group()) for m in re.finditer(r"\b[\w-]*(?:[A-Z]|\d)[\w-]*\b", question)
-                 if m.start() > 0]
-    return [sentence, " ".join(w for _pos, w in sorted(found + technical))]
+    return [sentence, " ".join(w for _pos, w in sorted(found + _technical(question)))]
+
+
+def key_phrases(question):
+    """Expressions à retrouver telles quelles dans un passage (« airfield takeoff », « GBU-12 ») : le passage qui
+    les contient, souvent celui qui porte ce titre, passe devant ceux qui en parlent en passant."""
+    found, _ = _translated(question)
+    return ({w.lower() for _p, w in found if " " in w}
+            | {w.lower() for _p, w in _technical(question) if len(w) >= 3})
 
 
 # --------------------------------------------------------------------------- emplacements
@@ -357,6 +374,11 @@ class Manuals:
                 for i, score, sem in self._rank(q_text, idx):
                     if i not in ranked or score > ranked[i][0]:
                         ranked[i] = (score, sem)
+            phrases = key_phrases(query)
+            for i, (score, sem) in ranked.items():
+                text = re.sub(r"\s+", " ", self.chunks[i]["text"].lower())
+                hits = sum(p in text for p in phrases)
+                ranked[i] = (score + min(0.12, 0.06 * hits), sem)
             # pages de sommaire (lignes « Titre ........ 81 ») : des titres, pas de contenu
             order = [i for i in sorted(ranked, key=lambda i: -ranked[i][0])
                      if len(TOC.findall(self.chunks[i]["text"])) < 3]

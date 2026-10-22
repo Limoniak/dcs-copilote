@@ -45,9 +45,10 @@ L'overlay est invisible en VR et en plein écran exclusif : il ne reste que la v
 - [x] Mise à jour depuis l'appli (vérifier la dernière Release et proposer de la télécharger)
 
 ## 7. Tests automatiques
-- [ ] Tests (pytest) dans le dépôt : client IA (nouvel essai, secours), prompts, découpage des phrases,
-      manuels, correspondance Chuck's Guides ↔ modules, script Lua (via lupa)
-- [ ] GitHub Actions à chaque push
+- [x] Tests (pytest) dans le dépôt : client IA (secours), prompts, découpage des phrases, manuels,
+      checklist, config, script DCS, interface (molette, poignée, logo, classement des modèles)
+- [ ] Tests à ajouter : correspondance Chuck's Guides ↔ modules, script Lua (via lupa)
+- [x] GitHub Actions à chaque push (`.github/workflows/tests.yml`)
 
 ## 8. Petits plus
 - [ ] Réindexer automatiquement les manuels officiels après une mise à jour de DCS

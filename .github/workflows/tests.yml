@@ -1,0 +1,29 @@
+# Tests automatiques (logique + interface sans écran) à chaque push et pull request.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: "1"
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # seulement ce que les tests importent : pas de Whisper, voix ni manuels à télécharger
+      - name: Dépendances
+        run: pip install numpy requests PySide6-Essentials pytest
+
+      - name: Tests
+        run: python -m pytest tests -q

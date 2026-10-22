@@ -25,6 +25,8 @@ Fabrication automatique par GitHub Actions (`.github/workflows/windows-exe.yml`)
 
 Fabrication à la main sous Windows : `pip install -r requirements.txt pyinstaller`, `python build/make_icon.py`, `pyinstaller --noconfirm build/dcs-copilote.spec` → `dist/DCS-Copilote/`.
 
+Tests : `python -m pytest tests` (logique et interface sans écran, sans micro ni DCS) ; lancés aussi par GitHub Actions à chaque push.
+
 ## Installation
 
 **Windows** (Python 3.11/3.12) : `install.bat`, puis `run.bat`.
