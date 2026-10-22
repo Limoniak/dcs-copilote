@@ -1,6 +1,7 @@
 """Client minimal pour API compatible OpenAI (/chat/completions en streaming)."""
 import json
 import os
+import re
 import time
 
 import requests
@@ -14,8 +15,10 @@ class LLMError(Exception):
         self.kind = kind
 
 
-# modèles dont le quota du jour est épuisé : (fournisseur, modèle) → instant où réessayer
+# modèles dont le quota du jour est épuisé (ou introuvables) : (fournisseur, modèle) → instant où réessayer
 _exhausted = {}
+# modèles retirés par le fournisseur : (fournisseur, modèle) → remplaçant qu'il conseille
+_replaced = {}
 
 
 def _quota_info(text):
@@ -178,19 +181,25 @@ class LLMClient:
         on_retry = on_retry or (lambda m: None)
         alive = alive or (lambda: True)
         headers = self._headers()
-        models = [self.cfg["model"]]
-        for m in str(self.cfg.get("fallback_model") or "").split(","):
-            if m.strip() and m.strip() not in models:
-                models.append(m.strip())
+        prov = self.cfg["provider"]
+        models = []
+        for m in [self.cfg["model"]] + str(self.cfg.get("fallback_model") or "").split(","):
+            m = _replaced.get((prov, m.strip()), m.strip())
+            if m and m not in models:
+                models.append(m)
         now = time.monotonic()
-        usable = [m for m in models if _exhausted.get((self.cfg["provider"], m), 0) <= now]
+        usable = [m for m in models if _exhausted.get((prov, m), 0) <= now]
         if not usable:
-            raise LLMError(f"Quota du jour épuisé chez {self.name} pour {', '.join(models)}.", "quota")
+            raise LLMError(f"Aucun modèle utilisable chez {self.name} pour l'instant ({', '.join(models)} : "
+                           f"quota du jour épuisé ou modèle introuvable).", "quota")
 
         err, kind = None, "overload"
-        for i, model in enumerate(usable):
+        i = 0
+        while i < len(usable):
+            model = usable[i]
             if i:
                 on_retry(f"{usable[i - 1]} indisponible → modèle de secours {model}")
+            i += 1
             for attempt in range(len(RETRY_DELAYS) + 1):
                 if not alive():
                     return
@@ -201,12 +210,25 @@ class LLMClient:
                 status, text = r.status_code, r.text
                 r.close()
                 err = self._error(status, text, model)
+                if status == 404:
+                    # modèle retiré ou inconnu : on prend le remplaçant conseillé par le fournisseur
+                    # (« use models/gemini-3.5-flash-lite »), sinon le modèle de secours suivant
+                    kind = "model"
+                    rec = re.search(r"use (?:models/)?([\w.\-]+[\w])", _api_message(text) + " " + text)
+                    if rec and rec.group(1) not in usable and rec.group(1) != model:
+                        _replaced[(prov, model)] = rec.group(1)
+                        usable.insert(i, rec.group(1))
+                        print(f"[IA] {model} retiré par {self.name} → {rec.group(1)} (à mettre comme modèle "
+                              f"dans ⚙ Réglages → IA)", flush=True)
+                    else:
+                        _exhausted[(prov, model)] = time.monotonic() + 12 * 3600
+                    break
                 if status not in RETRY_STATUS:
                     raise LLMError(err, "auth" if status in (401, 403) else "other")
                 per_day, delay = _quota_info(text) if status == 429 else (False, None)
                 if per_day or (delay and delay > 10):
                     # quota épuisé pour longtemps : inutile de réessayer ce modèle
-                    _exhausted[(self.cfg["provider"], model)] = time.monotonic() + (delay or 3600)
+                    _exhausted[(prov, model)] = time.monotonic() + (delay or 3600)
                     kind = "quota"
                     print(f"[IA] {err}", flush=True)
                     break
