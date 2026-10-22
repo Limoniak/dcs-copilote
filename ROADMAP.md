@@ -53,5 +53,5 @@ L'overlay est invisible en VR et en plein écran exclusif : il ne reste que la v
 ## 8. Petits plus
 - [x] Réindexer automatiquement les manuels officiels après une mise à jour de DCS (au lancement, seuls les PDF modifiés)
 - [ ] Suivi de la consommation des API payantes
-- [ ] Historique des questions, exportable en notes
+- [x] Historique des questions, exportable en notes (Markdown, un fichier par jour)
 - [ ] Interface en anglais

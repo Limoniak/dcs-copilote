@@ -17,6 +17,7 @@ from .textutil import SentenceSplitter
 MIN_AUDIO_S = 0.35
 DCS_SCRIPT_VERSION = 2          # champ « v » envoyé par dcs/DCSAssistant.lua
 RELEASES_API = "https://api.github.com/repos/Limoniak/dcs-copilote/releases/latest"
+HISTORY_DIR = os.path.join("data", "historique")
 
 
 class App:
@@ -870,7 +871,20 @@ class App:
             self.overlay.show_actions(True)
             if sources:
                 self.overlay.info(sources)
+            self._note(question, answer, sources)
         self._ready()
+
+    def _note(self, question, answer, sources):
+        """Historique à relire après le vol : un fichier Markdown par jour dans data/historique/."""
+        try:
+            os.makedirs(HISTORY_DIR, exist_ok=True)
+            now = time.localtime()
+            meta = " · ".join(x for x in (self.current_aircraft(), sources) if x)
+            with open(os.path.join(HISTORY_DIR, time.strftime("%Y-%m-%d.md", now)), "a", encoding="utf-8") as f:
+                f.write(f"## {time.strftime('%H:%M', now)} — {question}\n\n" + (f"*{meta}*\n\n" if meta else "")
+                        + answer.strip() + "\n\n")
+        except OSError as e:
+            print(f"[historique] {e}", flush=True)
 
     def run(self):
         self.overlay.mainloop()

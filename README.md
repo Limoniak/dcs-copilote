@@ -46,6 +46,7 @@ Overlay semi-transparent toujours au premier plan (Qt / PySide6) : appareil, ré
 - **Haut-parleur** : lire ou non les réponses aux questions tapées.
 - Icône dans la **zone de notification** (si le bureau en a une) : afficher / masquer l'overlay, réglages, quitter.
 - Une seule instance à la fois ; journal dans `logs/dcs-copilote.log` (bouton « Ouvrir le journal » des réglages).
+- **Historique** : chaque question et sa réponse (appareil, pages du manuel) sont notées dans `data/historique/AAAA-MM-JJ.md`, à relire après le vol (bouton « Historique des questions » des réglages).
 
 ## Checklists, alertes, latence
 

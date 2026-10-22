@@ -79,6 +79,18 @@ def test_comparaison_des_versions():
     assert not _version("v1.0.4") > _version("v1.0.4")
 
 
+def test_historique_markdown(tmp_path, monkeypatch):
+    from dcs_copilote import app
+    monkeypatch.setattr(app, "HISTORY_DIR", str(tmp_path))
+    fake = types.SimpleNamespace(current_aircraft=lambda: "F/A-18C Hornet")
+    app.App._note(fake, "Comment sortir le train ?", "Poignée du train sur DOWN.", "Sources : Guide EN p. 57")
+    app.App._note(fake, "Et les volets ?", "Volets sur HALF.", "")
+    (day,) = tmp_path.iterdir()
+    text = day.read_text(encoding="utf-8")
+    assert text.count("## ") == 2 and "— Comment sortir le train ?" in text
+    assert "*F/A-18C Hornet · Sources : Guide EN p. 57*" in text and "*F/A-18C Hornet*" in text
+
+
 # ------------------------------------------------------------------ voix, checklist
 def test_decoupage_des_phrases_pour_la_voix():
     s = SentenceSplitter()

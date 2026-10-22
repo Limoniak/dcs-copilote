@@ -360,6 +360,12 @@ class SettingsWindow(QWidget):
         logb.setIcon(icon("folder", MUTED, 16))
         logb.setToolTip("Fichier logs/dcs-copilote.log : à joindre si tu signales un problème")
         logb.clicked.connect(self._open_log)
+        histb = QPushButton("  Historique des questions")
+        histb.setObjectName("nav")
+        histb.setIcon(icon("book", MUTED, 16))
+        histb.setToolTip("Questions et réponses, un fichier par jour (data/historique) : à relire après le vol")
+        histb.clicked.connect(self._open_history)
+        sl.addWidget(histb)
         sl.addWidget(logb)
         sl.addSpacing(6)
         sl.addWidget(_label("Ctrl+S : enregistrer\nÉchap : fermer", muted=True, wrap=True))
@@ -413,15 +419,21 @@ class SettingsWindow(QWidget):
     def paintEvent(self, _e):
         ui.paint_card(self, MARGIN, 16)
 
-    def _open_log(self):
+    def _open(self, path, missing):
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
-
-        from .logfile import LOG_PATH
-        if not os.path.exists(LOG_PATH):
-            self.msg("Pas encore de journal.", error=True)
+        if not os.path.exists(path):
+            self.msg(missing, error=True)
             return
-        QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(LOG_PATH)))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(path)))
+
+    def _open_log(self):
+        from .logfile import LOG_PATH
+        self._open(LOG_PATH, "Pas encore de journal.")
+
+    def _open_history(self):
+        from .app import HISTORY_DIR
+        self._open(HISTORY_DIR, "Pas encore d'historique : il se remplit à chaque réponse.")
 
     @staticmethod
     def _scroll(page):
