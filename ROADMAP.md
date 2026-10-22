@@ -48,7 +48,7 @@ L'overlay est invisible en VR et en plein écran exclusif : il ne reste que la v
 - [x] Tests (pytest) dans le dépôt : client IA (secours), prompts, découpage des phrases, manuels,
       checklist, config, script DCS, interface (molette, poignée, logo, classement des modèles)
 - [x] Correspondance Chuck's Guides ↔ modules
-- [ ] Script Lua (via lupa)
+- [x] Script Lua (via lupa, en Lua 5.1 comme DCS) : paquet envoyé, exports chaînés (SRS, Tacview), sans LuaSocket
 - [x] GitHub Actions à chaque push (`.github/workflows/tests.yml`)
 
 ## 8. Petits plus
