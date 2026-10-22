@@ -9,6 +9,14 @@ import time
 M_TO_FT, MS_TO_KT, MS_TO_FPM = 3.28084, 1.94384, 196.85
 HELICOPTERS = ("uh1h", "mi8", "ka50", "ah64", "sa342", "mi24", "oh58", "ch47")
 SPAWN_GRACE = 15          # s sans alerte après l'apparition dans l'appareil
+DEFAULT_LIMITS = (260, 260)
+# Vitesses maximales train sorti / volets sortis (kt), d'après les manuels de vol ; None = pas d'alerte volets
+# (volets automatiques : leur braquage en vol déclencherait de fausses alertes). Nom DCS normalisé → limites ;
+# les appareils absents gardent DEFAULT_LIMITS, prudentes pour un avion à réaction.
+LIMITS = {
+    "fa18c": (250, 250), "f16c": (300, None), "f15e": (250, 250), "f14": (280, 225), "av8b": (250, 250),
+    "a10c": (200, 210), "m2000": (260, None), "p51d": (148, 143), "tf51d": (148, 143),
+}
 
 
 def _norm(s):
@@ -24,8 +32,11 @@ def is_helicopter(aircraft):
 RULES = {
     "gear_approach": ("Train rentré en approche", "Sous 1 000 ft sol, en descente, sous 175 kt, train rentré.", 2, 60),
     "sink_rate": ("Taux de chute près du sol", "Sous 500 ft sol, descente de plus de 2 500 ft/min.", 1, 15),
-    "gear_speed": ("Train sorti à grande vitesse", "Train sorti au-dessus de 260 kt.", 2, 60),
-    "flaps_speed": ("Volets sortis à grande vitesse", "Volets sortis au-dessus de 260 kt.", 2, 60),
+    "gear_speed": ("Train sorti à grande vitesse",
+                   "Au-dessus de la limite de l'appareil (F/A-18C 250 kt, F-16C 300 kt, P-51D 148 kt…, sinon 260 kt).",
+                   2, 60),
+    "flaps_speed": ("Volets sortis à grande vitesse",
+                    "Au-dessus de la limite de l'appareil (sinon 260 kt) ; sans objet sur F-16 et Mirage 2000.", 2, 60),
     "low_fuel": ("Carburant bas", "Moins de 15 % du plein constaté pendant le vol.", 3, 300),
     "g_load": ("Facteur de charge élevé", "Plus de 8 G ou moins de −2,5 G.", 1, 30),
 }
@@ -36,6 +47,12 @@ def _num(f, k):
     return v if isinstance(v, (int, float)) else None
 
 
+def limits(aircraft):
+    """(train, volets) en kt pour cet appareil."""
+    n = _norm(aircraft)
+    return next((v for k, v in LIMITS.items() if n.startswith(k)), DEFAULT_LIMITS)
+
+
 def evaluate(rule, f, ctx):
     """Message d'alerte si la condition de la règle est remplie, sinon None."""
     ias = (_num(f, "ias_ms") or 0) * MS_TO_KT
@@ -44,6 +61,7 @@ def evaluate(rule, f, ctx):
     if on_ground:
         return None
     heli = ctx["heli"]
+    gear_max, flaps_max = ctx.get("limits", DEFAULT_LIMITS)
     if rule == "gear_approach" and not heli and None not in (agl, vs, gear):
         if gear < 0.05 and agl * M_TO_FT < 1000 and vs * MS_TO_FPM < -500 and ias < 175:
             return "Train rentré, on est en approche !"
@@ -51,10 +69,10 @@ def evaluate(rule, f, ctx):
         if agl * M_TO_FT < 500 and vs * MS_TO_FPM < -2500:
             return "On descend trop vite, on est bas, redresse !"
     elif rule == "gear_speed" and not heli and gear is not None:
-        if gear > 0.5 and ias > 260:
+        if gear > 0.5 and ias > gear_max:
             return f"Train sorti à {ias:.0f} nœuds, réduis !"
-    elif rule == "flaps_speed" and not heli and flaps is not None:
-        if flaps > 0.2 and ias > 260:
+    elif rule == "flaps_speed" and not heli and flaps is not None and flaps_max:
+        if flaps > 0.2 and ias > flaps_max:
             return f"Volets sortis à {ias:.0f} nœuds, réduis !"
     elif rule == "low_fuel":
         fuel = _num(f, "fuel_kg")
@@ -76,7 +94,7 @@ class Alerts:
     def reset(self, aircraft):
         self.aircraft = aircraft
         self.since = time.monotonic()
-        self.ctx = {"heli": is_helicopter(aircraft), "max_fuel": 0.0}
+        self.ctx = {"heli": is_helicopter(aircraft), "max_fuel": 0.0, "limits": limits(aircraft)}
         self.held = {r: 0 for r in RULES}
         self.last = {r: 0.0 for r in RULES}
 

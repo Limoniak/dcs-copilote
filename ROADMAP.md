@@ -28,7 +28,8 @@ L'overlay est invisible en VR et en plein écran exclusif : il ne reste que la v
       train ou volets sortis à grande vitesse, taux de chute élevé près du sol, carburant bas,
       facteur de charge élevé
 - [x] Réglables (activables une par une), délai minimum entre deux répétitions
-- [ ] Seuils par appareil (limites de vitesse train/volets, incidence d'approche…) tirés des manuels
+- [x] Limites train / volets par appareil (F/A-18C, F-16C, F-15E, F-14, AV-8B, A-10C, Mirage 2000, P-51D)
+- [ ] Autres seuils par appareil (incidence d'approche, facteur de charge…), autres modules
 
 ## 5. Latence
 - [x] Mesurer chaque étape dans le journal (transcription, 1er mot de l'IA, début de la voix)

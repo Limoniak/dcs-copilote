@@ -110,6 +110,26 @@ def test_guide_de_chuck_pour_chaque_appareil(tmp_path):
     assert sorted(chucks.installed_slugs(GUIDES, str(tmp_path))) == ["av-8b", "f-16cm", "fa-18c", "m-2000c", "uh-1h"]
 
 
+def test_alertes_selon_les_limites_de_l_appareil():
+    from dcs_copilote.alerts import MS_TO_KT, Alerts
+
+    def fly(aircraft, kt, gear=1.0, flaps=0.0, seconds=3):
+        said = []
+        a = Alerts(lambda: {"enabled": True}, said.append)
+        packet = {"aircraft": aircraft, "agl_m": 600, "vs_ms": 0, "ias_ms": kt / MS_TO_KT, "gear": gear, "flaps": flaps}
+        a.feed(packet)
+        a.since -= 60                                 # passé le délai de grâce après l'apparition
+        for _ in range(seconds):
+            a.feed(packet)
+        return said
+
+    assert fly("P-51D", 160) == ["Train sorti à 160 nœuds, réduis !"]
+    assert fly("FA-18C_hornet", 160) == []
+    assert fly("FA-18C_hornet", 270) == ["Train sorti à 270 nœuds, réduis !"]
+    assert fly("F-16C_50", 280) == [] and fly("F-16C_50", 450, gear=0.0, flaps=0.6) == []   # volets automatiques
+    assert fly("A-10C_2", 230, gear=0.0, flaps=0.5) == ["Volets sortis à 230 nœuds, réduis !"]
+
+
 # ------------------------------------------------------------------ voix, checklist
 def test_decoupage_des_phrases_pour_la_voix():
     s = SentenceSplitter()

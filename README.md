@@ -51,7 +51,7 @@ Overlay semi-transparent toujours au premier plan (Qt / PySide6) : appareil, ré
 ## Checklists, alertes, latence
 
 - **Checklist** : « Lance la procédure de démarrage » ou « checklist décollage » (à la voix ou tapé). Les étapes sont tirées des manuels indexés et annoncées une par une ; **appui bref sur le PTT** ou « suivant » = étape suivante, « répète », « précédent », « stop ». Boutons équivalents dans l'overlay.
-- **Alertes vocales** (Réglages → Alertes) : train rentré en approche, taux de chute élevé près du sol, train ou volets sortis à grande vitesse, carburant bas, facteur de charge élevé. Une alerte passe devant la réponse en cours. Il faut le script DCS v2.
+- **Alertes vocales** (Réglages → Alertes) : train rentré en approche, taux de chute élevé près du sol, train ou volets sortis au-delà de la limite de l'appareil (F/A-18C 250 kt, F-16C 300 kt, P-51D 148 kt…), carburant bas, facteur de charge élevé. Une alerte passe devant la réponse en cours. Il faut le script DCS v2.
 - **Effet radio** (Réglages → Voix) : léger, radio ou fort — bande étroite, saturation, souffle, clic d'ouverture et « kssh » de fin de transmission (une fois par réponse).
 - **Latence** : chaque question laisse une ligne `[latence]` dans le journal (transcription, 1er mot de l'IA, début de la voix). Pour aller plus vite : « Réponse rapide en vol » (Réglages → IA, limite la réflexion de Gemini 2.5 / GPT-5…) et reconnaissance vocale **en ligne** (Réglages → Voix : Groq gratuit ~0,3 s, ou OpenAI), avec repli automatique sur Whisper local.
 
