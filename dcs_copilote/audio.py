@@ -515,47 +515,63 @@ class Speaker(threading.Thread):
 
     def run(self):
         while True:
-            prio, seq, text, gen = self.q.get()
-            if gen is not None and gen != self.current_gen():
-                continue
-            tts = self.tts
-            if tts is None:
-                continue
-            self._synth_busy = True
             try:
-                audio, sr = tts.synth(text)
-            except Exception as e:  # noqa: BLE001
-                self.log(f"Erreur TTS : {e}")
-                continue
-            finally:
-                self._synth_busy = False
-            if audio is not None and (gen is None or gen == self.current_gen()):
-                self.audio_q.put((prio, seq, audio, sr, gen))
-                if prio == 0 and self.busy.is_set():
-                    sd.stop()                  # l'alerte coupe la phrase en cours
+                self._synth_one()
+            except Exception as e:  # noqa: BLE001  (ne jamais laisser mourir le thread : plus de voix sinon)
+                self.log(f"Erreur voix : {e}")
+
+    def _synth_one(self):
+        prio, seq, text, gen = self.q.get()
+        if gen is not None and gen != self.current_gen():
+            return
+        tts = self.tts
+        if tts is None:
+            return
+        self._synth_busy = True
+        try:
+            audio, sr = tts.synth(text)
+        except Exception as e:  # noqa: BLE001
+            self.log(f"Erreur TTS : {e}")
+            return
+        finally:
+            self._synth_busy = False
+        if audio is not None and (gen is None or gen == self.current_gen()):
+            self.audio_q.put((prio, seq, audio, sr, gen))
+            if prio == 0 and self.busy.is_set():
+                sd.stop()                  # l'alerte coupe la phrase en cours
 
     def _player(self):
         while True:
-            _prio, _seq, audio, sr, gen = self.audio_q.get()
-            if gen is not None and gen != self.current_gen():
-                continue
-            self.busy.set()
-            if self.on_start:
-                self.on_start(gen)
-            level = self.radio
             try:
-                if level:
-                    audio = radio_fx(audio, sr, level)
-                    key = ("alerte", _seq) if gen is None else gen
-                    if self._keyed != key:         # début de transmission : clic d'ouverture
-                        audio = np.concatenate([squelch(sr, level, "open"), audio])
-                        self._keyed = key
-                play(audio, sr, self.device, wait=True)
-                # fin de transmission (plus rien à dire) : souffle de squelch
-                if level and self.q.empty() and self.audio_q.empty() and not self._synth_busy:
-                    play(squelch(sr, level, "tail"), sr, self.device, wait=True)
-                    self._keyed = None
-            except Exception as e:  # noqa: BLE001
-                self.log(f"Erreur audio : {e}")
-            finally:
+                self._play_one()
+            except Exception as e:  # noqa: BLE001  (ne jamais laisser mourir le thread : plus de voix sinon)
                 self.busy.clear()
+                self.log(f"Erreur lecture : {e}")
+
+    def _play_one(self):
+        _prio, _seq, audio, sr, gen = self.audio_q.get()
+        if gen is not None and gen != self.current_gen():
+            return
+        self.busy.set()
+        try:
+            if self.on_start:
+                try:
+                    self.on_start(gen)
+                except Exception as e:  # noqa: BLE001
+                    print(f"[voix] mesure de latence : {e}", flush=True)
+            level = self.radio
+            if level:
+                audio = radio_fx(audio, sr, level)
+                key = ("alerte", _seq) if gen is None else gen
+                if self._keyed != key:         # début de transmission : clic d'ouverture
+                    audio = np.concatenate([squelch(sr, level, "open"), audio])
+                    self._keyed = key
+            play(audio, sr, self.device, wait=True)
+            # fin de transmission (plus rien à dire) : souffle de squelch
+            if level and self.q.empty() and self.audio_q.empty() and not self._synth_busy:
+                play(squelch(sr, level, "tail"), sr, self.device, wait=True)
+                self._keyed = None
+        except Exception as e:  # noqa: BLE001
+            self.log(f"Erreur audio : {e}")
+        finally:
+            self.busy.clear()

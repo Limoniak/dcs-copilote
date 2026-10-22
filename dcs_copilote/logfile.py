@@ -15,20 +15,25 @@ class _Tee:
 
     def __init__(self, stream, f, lock):
         self.stream, self.f, self.lock = stream, f, lock
-        self.bol = True
+        self.pending = threading.local()      # début de ligne pas encore terminé, par thread
 
     def write(self, s):
-        if self.stream is not None:
-            try:
-                self.stream.write(s)
-            except (OSError, ValueError):
-                pass
+        # print() écrit le texte puis "\n" séparément : on n'écrit que des lignes complètes,
+        # sinon deux threads mélangent leurs lignes
+        buf = getattr(self.pending, "buf", "") + s
+        *lines, self.pending.buf = buf.split("\n")
+        if not lines:
+            return len(s)
+        text = "".join(line + "\n" for line in lines)
         with self.lock:
-            for part in s.splitlines(keepends=True):
-                if self.bol:
-                    self.f.write(time.strftime("%H:%M:%S "))
-                self.f.write(part)
-                self.bol = part.endswith("\n")
+            if self.stream is not None:
+                try:
+                    self.stream.write(text)
+                    self.stream.flush()
+                except (OSError, ValueError):
+                    pass
+            for line in lines:
+                self.f.write(time.strftime("%H:%M:%S ") + line + "\n")
             self.f.flush()
         return len(s)
 

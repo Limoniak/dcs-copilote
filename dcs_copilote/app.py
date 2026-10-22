@@ -314,7 +314,7 @@ class App:
 
     def _on_voice_start(self, gen):
         lat = self.lat
-        if lat.get("gen") == gen and lat.get("voice") is None:
+        if gen is not None and lat.get("gen") == gen and "t0" in lat and lat.get("voice") is None:
             lat["voice"] = time.monotonic() - lat["t0"]
             self._log_latency()
 
