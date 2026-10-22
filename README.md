@@ -13,6 +13,16 @@ Ton copilote vocal pour DCS World (Windows / Linux) : il te parle comme un équi
 - **Question tapée** dans l'overlay = mode *sol* : réponse détaillée, non lue (sauf `speak_typed`).
 - Contexte conservé sur 6 échanges (« et ensuite ? » fonctionne), remis à zéro au changement d'appareil ou avec ↺.
 
+## Version Windows (.exe)
+
+Pas besoin d'installer Python : télécharge `DCS-Copilote-vX.Y.Z-windows.zip` dans les **Releases** du dépôt, décompresse-le dans un dossier où tu peux écrire (par exemple `Documents\DCS-Copilote`, pas `Program Files`), puis lance `DCS-Copilote.exe`. La config, le journal, les manuels et les modèles téléchargés sont rangés à côté de l'exécutable.
+
+Fabrication automatique par GitHub Actions (`.github/workflows/windows-exe.yml`) :
+- **publier une version** : `git tag v1.0.0 && git push origin v1.0.0` → construit, vérifie (`--selftest`) et publie le .zip dans les Releases ;
+- **construction d'essai** : onglet *Actions* → *Windows .exe* → *Run workflow* → le .zip est téléchargeable dans le résultat (14 jours).
+
+Fabrication à la main sous Windows : `pip install -r requirements.txt pyinstaller`, `python build/make_icon.py`, `pyinstaller --noconfirm build/dcs-copilote.spec` → `dist/DCS-Copilote/`.
+
 ## Installation
 
 **Windows** (Python 3.11/3.12) : `install.bat`, puis `run.bat`.

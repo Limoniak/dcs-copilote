@@ -15,7 +15,10 @@ import argparse
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# Version empaquetée (.exe PyInstaller) : les fichiers de l'utilisateur (config, journal, manuels,
+# voix) vont à côté de l'exécutable ; sinon à côté de ce script.
+FROZEN = getattr(sys, "frozen", False)
+HERE = os.path.dirname(sys.executable if FROZEN else os.path.abspath(__file__))
 os.chdir(HERE)
 sys.path.insert(0, HERE)
 
@@ -88,6 +91,76 @@ def cmd_models(cfg):
     return 0
 
 
+def cmd_selftest():
+    """Vérifie que tout ce dont l'appli a besoin est présent (utilisé par la fabrication du .exe)."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    checks = []
+
+    def check(name, fn):
+        try:
+            detail = fn()
+            checks.append((True, name, detail or ""))
+        except Exception as e:  # noqa: BLE001
+            checks.append((False, name, f"{type(e).__name__}: {e}"))
+
+    def qt():
+        from dcs_copilote import ui_kit
+        ui_kit.application()
+        ui_kit.icon("plane")
+        return "PySide6"
+
+    def whisper():
+        import faster_whisper.utils as u
+        assets = os.listdir(u.get_assets_path())
+        assert any("silero" in a for a in assets), "modèle VAD absent"
+        return "assets OK"
+
+    def piper_voice():
+        import glob
+        from dcs_copilote.audio import PiperTTS
+        voices = glob.glob(os.path.join("voices", "*.onnx"))
+        if not voices:
+            import piper  # noqa: F401
+            return "paquet OK (aucune voix fournie)"
+        audio, sr = PiperTTS(voices[0]).synth("Test.")
+        assert audio is not None and len(audio), "synthèse vide"
+        return f"{os.path.basename(voices[0])} : {len(audio) / sr:.1f} s"
+
+    def lua():
+        from dcs_copilote.dcs_install import LUA_SRC
+        assert os.path.exists(LUA_SRC), LUA_SRC
+        return "DCSAssistant.lua"
+
+    def mods():
+        os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+        import edge_tts  # noqa: F401
+        import fastembed  # noqa: F401
+        import miniaudio  # noqa: F401
+        import pygame  # noqa: F401
+        import pymupdf  # noqa: F401
+        import requests  # noqa: F401
+        return "edge-tts, fastembed, miniaudio, pygame, pymupdf"
+
+    def audio():
+        import sounddevice as sd
+        return f"PortAudio {sd.get_portaudio_version()[1]}"
+
+    def keyboard():
+        if sys.platform != "win32" and not os.environ.get("DISPLAY"):
+            return "ignoré (pas d'écran)"
+        from pynput import keyboard as kb  # noqa: F401
+        return "pynput"
+
+    for name, fn in (("Interface", qt), ("Whisper", whisper), ("Voix Piper", piper_voice), ("Script DCS", lua),
+                     ("Modules", mods), ("Audio", audio), ("Clavier", keyboard)):
+        check(name, fn)
+    lines = [f"{'OK ' if ok else 'ÉCHEC'} {name:12} {detail}" for ok, name, detail in checks]
+    print("\n".join(lines), flush=True)
+    with open("selftest.log", "w", encoding="utf-8") as f:    # le .exe fenêtré n'a pas de console
+        f.write("\n".join(lines) + "\n")
+    return 0 if all(ok for ok, _n, _d in checks) else 1
+
+
 def cmd_download_voice(name):
     from dcs_copilote.audio import download_voice
     print(f"Téléchargement de {name}…")
@@ -105,7 +178,10 @@ def main():
     p.add_argument("--models", action="store_true", help="liste les modèles du fournisseur IA")
     p.add_argument("--provider", help="fournisseur IA pour ce lancement (ollama, openai, gemini, grok…)")
     p.add_argument("--model", help="modèle IA pour ce lancement")
+    p.add_argument("--selftest", action="store_true", help="vérifie que l'appli est complète")
     a = p.parse_args()
+    if a.selftest:
+        return cmd_selftest()
 
     first_run = not os.path.exists(CFG_PATH)
     cfg = cfgmod.load(CFG_PATH)

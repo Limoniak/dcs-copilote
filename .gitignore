@@ -13,3 +13,10 @@ data/
 models/
 *.part
 *.swp
+
+# Fabrication du .exe (PyInstaller)
+dist/
+build/icon.ico
+build/icon.png
+build/dcs-copilote/
+selftest.log
