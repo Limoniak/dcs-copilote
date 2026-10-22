@@ -419,9 +419,13 @@ class App:
     def more(self):
         """Bouton « Détailler » : réponse complète à la question précédente (mode sol)."""
         if self.last_answer:
-            self.ask_typed("Détaille ta réponse précédente : toutes les étapes et les explications utiles.")
+            gen = self._new_gen()
+            self.speaker.stop()
+            self.jobs.put(("detail", "Détaille ta réponse précédente : toutes les étapes et les explications utiles.",
+                           gen))
 
     def ask_typed(self, question):
+        print(f"[question tapée] {question}", flush=True)
         gen = self._new_gen()
         self.speaker.stop()
         self.jobs.put(("text", question, gen))
@@ -448,9 +452,18 @@ class App:
                     self._route(question, "vol", True, gen)
                 else:
                     self.lat = {"gen": gen, "t0": time.monotonic()}
-                    self._route(payload, "sol", self.cfg["tts"].get("speak_typed", False), gen)
+                    speak = self.cfg["tts"].get("speak_typed", False)
+                    if kind == "detail":
+                        self._answer(payload, "sol", speak, gen)
+                    else:
+                        # lue à voix haute : courte comme une question vocale (« Détailler » pour la suite)
+                        self._route(payload, "vol" if speak else "sol", speak, gen)
             except Exception as e:  # noqa: BLE001
                 self.log(f"Erreur : {e}", error=True)
+
+    def _on_retry(self, msg):
+        print(f"[IA] {msg}", flush=True)
+        self.overlay.set_status(msg, state="busy")
 
     def _route(self, question, mode, speak, gen):
         """Commande de checklist, démarrage d'une checklist, ou question ordinaire."""
@@ -475,7 +488,8 @@ class App:
         try:
             if self.llm is None:
                 raise LLMError("IA non configurée : ⚙ Réglages → IA")
-            text = "".join(self.llm.stream(messages, alive=lambda: gen == self.gen, fast=True))
+            text = "".join(self.llm.stream(messages, alive=lambda: gen == self.gen, fast=True,
+                                           on_retry=self._on_retry))
         except LLMError as e:
             self._beep(2)
             self.overlay.append(f"\n{e}\n", "err")
@@ -557,9 +571,9 @@ class App:
         try:
             if self.llm is None:
                 raise LLMError("IA non configurée : ⚙ Réglages → IA")
-            fast = mode == "vol" and self.cfg["llm"].get("fast", True)
+            fast = self.cfg["llm"].get("fast", True)
             for delta in self.llm.stream(messages, alive=lambda: gen == self.gen, fast=fast,
-                                         on_retry=lambda m: self.overlay.set_status(m, state="busy")):
+                                         on_retry=self._on_retry):
                 if gen != self.gen:
                     cancelled = True
                     break
@@ -571,6 +585,7 @@ class App:
                     for s in splitter.feed(delta):
                         self.speaker.say(s, gen)
         except LLMError as e:
+            print(f"[IA] erreur : {e}", flush=True)
             self._beep(2)
             self.overlay.append(f"\n{e}\n", "err")
             self.log("Erreur IA", error=True)

@@ -430,9 +430,9 @@ class SettingsWindow(QWidget):
         lay.addWidget(conn)
 
         adv = Card("Comportement")
-        self.t_fast = adv.add("Réponse rapide en vol", Toggle(llm.get("fast", True)),
+        self.t_fast = adv.add("Réponse rapide", Toggle(llm.get("fast", True)),
                               "Limite la « réflexion » des modèles qui en ont (Gemini 2.5, GPT-5…) : "
-                              "1 à 3 s gagnées pour les questions vocales.", stretch=False)
+                              "1er mot en ~0,5 s au lieu de 2 à 15 s.", stretch=False)
         self.seg_len = adv.add("Réponses vocales", Segmented(
             [("tres_courte", "Très courtes"), ("courte", "Courtes"), ("detaillee", "Détaillées")],
             llm.get("answer_length", "courte")), "1 phrase · 2-3 phrases · jusqu'à 6. Toujours 15 mots max par "
@@ -851,7 +851,9 @@ class SettingsWindow(QWidget):
         syn = Card("Synthèse vocale")
         self.t_tts = syn.add("Lire les réponses", Toggle(tts["enabled"]), stretch=False)
         self.t_typed = syn.add("Lire aussi les questions tapées", Toggle(tts.get("speak_typed", False)),
-                               "Les réponses détaillées (mode sol) sont longues à écouter.", stretch=False)
+                               "Activé : réponse courte et lue, comme à la voix (« Détailler » pour la "
+                               "version complète). Désactivé : réponse détaillée, à lire à l'écran.",
+                               stretch=False)
         self.seg_engine = syn.add("Moteur", Segmented(ENGINES, tts["engine"]))
         self.engine_hint = syn.add_widget(_label("", muted=True, wrap=True))
         self.cb_edge = syn.add("Voix", _combo(EDGE_VOICES, tts.get("edge_voice", EDGE_VOICES[0]), editable=True),
