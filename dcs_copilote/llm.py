@@ -7,10 +7,41 @@ import requests
 
 
 class LLMError(Exception):
-    pass
+    """kind : "quota" / "overload" (le secours peut prendre le relais), "auth", "other"."""
+
+    def __init__(self, msg, kind="other"):
+        super().__init__(msg)
+        self.kind = kind
 
 
-NAMES = {"ollama": "Ollama", "openai": "OpenAI", "gemini": "Gemini", "grok": "Grok", "openrouter": "OpenRouter"}
+# modèles dont le quota du jour est épuisé : (fournisseur, modèle) → instant où réessayer
+_exhausted = {}
+
+
+def _quota_info(text):
+    """Quota Gemini : (par jour ?, délai avant nouvel essai en s) tirés des détails de l'erreur 429."""
+    per_day, delay = False, None
+    try:
+        j = json.loads(text)
+        j = j[0] if isinstance(j, list) else j
+        for d in (j.get("error") or {}).get("details", []):
+            for v in d.get("violations", []):
+                if "PerDay" in v.get("quotaId", ""):
+                    per_day = True
+            if d.get("retryDelay"):
+                delay = float(str(d["retryDelay"]).rstrip("s"))
+    except (ValueError, AttributeError, TypeError):
+        pass
+    return per_day, delay
+
+
+def _hours(sec):
+    h = round(sec / 3600)
+    return f"{h} h" if h >= 1 else f"{max(1, round(sec / 60))} min"
+
+
+NAMES = {"ollama": "Ollama", "openai": "OpenAI", "gemini": "Gemini", "grok": "Grok", "openrouter": "OpenRouter",
+         "groq": "Groq"}
 RETRY_STATUS = {429, 500, 502, 503, 504}      # surcharge / limite passagère : on réessaie
 RETRY_DELAYS = (1.0, 2.5)                     # court : on est en vol
 # « réflexion » minimale des modèles qui raisonnent avant de répondre (Gemini 2.5, GPT-5, Grok mini…) :
@@ -107,6 +138,10 @@ class LLMClient:
         elif status == 404:
             msg = f"Modèle « {model} » introuvable chez {self.name} — bouton « Lister » dans ⚙ Réglages → IA."
         elif status == 429:
+            per_day, delay = _quota_info(text)
+            if per_day:
+                return (f"Quota gratuit du jour épuisé pour {model} chez {self.name}"
+                        + (f" : il revient dans {_hours(delay)}." if delay else "."))
             msg = f"{self.name} : limite de requêtes ou quota atteint."
         elif status >= 500:
             msg = f"{self.name} est surchargé ou indisponible pour le moment (modèle {model})."
@@ -137,20 +172,25 @@ class LLMClient:
     def stream(self, messages, on_retry=None, alive=None, fast=False):
         """Génère les morceaux de texte de la réponse au fil de l'eau.
 
-        Surcharge passagère (429/5xx) : nouvel essai, puis modèle de secours s'il est configuré.
+        Surcharge passagère (429/5xx) : nouvel essai, puis modèles de secours (liste séparée par des
+        virgules). Quota du jour épuisé : pas de nouvel essai, le modèle est sauté jusqu'à son retour.
         on_retry(message) informe l'utilisateur ; alive() faux = question annulée, on abandonne."""
         on_retry = on_retry or (lambda m: None)
         alive = alive or (lambda: True)
         headers = self._headers()
         models = [self.cfg["model"]]
-        fallback = (self.cfg.get("fallback_model") or "").strip()
-        if fallback and fallback != models[0]:
-            models.append(fallback)
+        for m in str(self.cfg.get("fallback_model") or "").split(","):
+            if m.strip() and m.strip() not in models:
+                models.append(m.strip())
+        now = time.monotonic()
+        usable = [m for m in models if _exhausted.get((self.cfg["provider"], m), 0) <= now]
+        if not usable:
+            raise LLMError(f"Quota du jour épuisé chez {self.name} pour {', '.join(models)}.", "quota")
 
-        err = None
-        for i, model in enumerate(models):
+        err, kind = None, "overload"
+        for i, model in enumerate(usable):
             if i:
-                on_retry(f"{models[i - 1]} indisponible → modèle de secours {model}")
+                on_retry(f"{usable[i - 1]} indisponible → modèle de secours {model}")
             for attempt in range(len(RETRY_DELAYS) + 1):
                 if not alive():
                     return
@@ -162,21 +202,24 @@ class LLMClient:
                 r.close()
                 err = self._error(status, text, model)
                 if status not in RETRY_STATUS:
-                    raise LLMError(err)
+                    raise LLMError(err, "auth" if status in (401, 403) else "other")
+                per_day, delay = _quota_info(text) if status == 429 else (False, None)
+                if per_day or (delay and delay > 10):
+                    # quota épuisé pour longtemps : inutile de réessayer ce modèle
+                    _exhausted[(self.cfg["provider"], model)] = time.monotonic() + (delay or 3600)
+                    kind = "quota"
+                    print(f"[IA] {err}", flush=True)
+                    break
                 if attempt == len(RETRY_DELAYS):
                     break
-                delay = RETRY_DELAYS[attempt]
-                try:
-                    delay = min(max(delay, float(r.headers.get("Retry-After", 0))), 8)
-                except ValueError:
-                    pass
+                delay = min(max(RETRY_DELAYS[attempt], delay or float(r.headers.get("Retry-After") or 0)), 8)
                 on_retry(f"{self.name} surchargé, nouvel essai dans {delay:.0f} s…")
                 end = time.monotonic() + delay
                 while time.monotonic() < end and alive():
                     time.sleep(0.1)
         if len(models) == 1:
-            err += "\nAstuce : ajoute un modèle de secours dans ⚙ Réglages → IA."
-        raise LLMError(err)
+            err += "\nAstuce : ajoute des modèles de secours ou un fournisseur de secours dans ⚙ Réglages → IA."
+        raise LLMError(err, kind)
 
     def _request(self, model, messages, headers, fast=False):
         payload = {

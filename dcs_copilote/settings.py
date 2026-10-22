@@ -22,6 +22,7 @@ PROVIDERS = {
     "openai": ("ChatGPT", "OpenAI", "clé sur platform.openai.com/api-keys"),
     "gemini": ("Gemini", "Google", "clé sur aistudio.google.com/apikey"),
     "grok": ("Grok", "xAI", "clé sur console.x.ai"),
+    "groq": ("Groq", "Gratuit, très rapide", "clé gratuite sur console.groq.com/keys"),
     "openrouter": ("OpenRouter", "Tous les modèles", "clé sur openrouter.ai/keys"),
     "custom": ("Autre", "Compatible OpenAI", "Open WebUI, LM Studio…"),
 }
@@ -391,7 +392,7 @@ class SettingsWindow(QWidget):
             b.setChecked(key == self.provider)
             b.clicked.connect(lambda _c=False, k=key: self._provider_changed(k))
             self.tiles.addButton(b)
-            grid.addWidget(b, i // 3, i % 3)
+            grid.addWidget(b, i // 4, i % 4)
         prov.lay.addLayout(grid)
         lay.addWidget(prov)
 
@@ -415,9 +416,17 @@ class SettingsWindow(QWidget):
         self.b_models.clicked.connect(self._list_models)
         ml.addWidget(self.b_models)
         conn.add("Modèle", mrow, "Pour la voix en vol, préfère un modèle rapide (mini, flash, fast).")
-        self.cb_fallback = conn.add("Modèle de secours", _combo([], editable=True),
-                                    "Utilisé si le modèle principal est surchargé (facultatif).")
-        self.cb_fallback.lineEdit().setPlaceholderText("aucun")
+        self.cb_fallback = conn.add("Modèles de secours", _combo([], editable=True),
+                                    "Essayés dans l'ordre si le modèle principal est surchargé ou à court de "
+                                    "quota. Plusieurs : séparés par des virgules.")
+        self.cb_fallback.lineEdit().setPlaceholderText("aucun — ex. gemini-2.5-flash-lite, gemini-3.5-flash-lite")
+        names = [(k, PROVIDERS.get(k, (k,))[0]) for k in llm["providers"]]
+        self.cb_backup = conn.add("Fournisseur de secours", _combo(["Aucun"] + [n for _k, n in names]),
+                                  "Prend le relais quand tous les modèles ci-dessus sont épuisés ou en panne "
+                                  "(sa clé et son modèle se règlent en cliquant sur sa tuile).")
+        self._backup_keys = {n: k for k, n in names}
+        cur = llm.get("fallback_provider", "")
+        self.cb_backup.setCurrentText(PROVIDERS.get(cur, (cur,))[0] if cur else "Aucun")
 
         trow = QHBoxLayout()
         self.b_test = QPushButton("Tester l'IA")
@@ -1229,6 +1238,7 @@ class SettingsWindow(QWidget):
     def _collect(self):
         c = self.c
         self._store_provider()
+        c["llm"]["fallback_provider"] = self._backup_keys.get(self.cb_backup.currentText(), "")
         c["llm"].update(answer_length=self.seg_len.value() or "courte", fast=self.t_fast.isChecked(),
                         custom_prompt=self.e_custom.toPlainText().strip(),
                         temperature=self.s_temp.value() / 10, max_history=self.s_hist.value(),

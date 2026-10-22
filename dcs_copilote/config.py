@@ -18,10 +18,13 @@ DEFAULTS = {
                        "api_key": "", "api_key_env": "GEMINI_API_KEY", "model": "gemini-2.5-flash"},
             "grok": {"base_url": "https://api.x.ai/v1", "api_key": "",
                      "api_key_env": "XAI_API_KEY", "model": "grok-4-fast-non-reasoning"},
+            "groq": {"base_url": "https://api.groq.com/openai/v1", "api_key": "",
+                     "api_key_env": "GROQ_API_KEY", "model": "llama-3.3-70b-versatile"},
             "openrouter": {"base_url": "https://openrouter.ai/api/v1", "api_key": "",
                            "api_key_env": "OPENROUTER_API_KEY", "model": "openai/gpt-4.1-mini"},
             "custom": {"base_url": "", "api_key": "", "model": ""},   # Open WebUI, LM Studio...
         },
+        "fallback_provider": "",     # fournisseur qui prend le relais (quota épuisé, panne) ; vide = aucun
         "temperature": 0.3,
         "answer_length": "courte",
         "fast": True,                # en vol : limiter la « réflexion » du modèle (réponse plus rapide)   # réponses vocales : tres_courte / courte / detaillee

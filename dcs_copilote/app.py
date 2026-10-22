@@ -88,6 +88,27 @@ class App:
             self.log(f"IA : {e}", error=True)
             return None
 
+    def _stream(self, messages, gen, fast):
+        """Réponse de l'IA ; si le fournisseur est à court de quota ou en panne, le fournisseur de
+        secours (Réglages → IA) prend le relais pour cette question."""
+        if self.llm is None:
+            raise LLMError("IA non configurée : ⚙ Réglages → IA")
+        alive = lambda: gen == self.gen  # noqa: E731
+        try:
+            yield from self.llm.stream(messages, alive=alive, fast=fast, on_retry=self._on_retry)
+            return
+        except LLMError as e:
+            backup = self.cfg["llm"].get("fallback_provider")
+            if e.kind not in ("quota", "overload") or not backup or backup == self.cfg["llm"]["provider"]:
+                raise
+            first = e
+        try:
+            client = LLMClient(dict(self.cfg["llm"], provider=backup))
+        except LLMError:
+            raise first from None
+        self._on_retry(f"{self.llm.name} indisponible → secours {client.name}")
+        yield from client.stream(messages, alive=alive, fast=fast, on_retry=self._on_retry)
+
     def _open_recorder(self):
         try:
             rec = self._Recorder(self.cfg["audio"]["input_device"])
@@ -489,10 +510,7 @@ class App:
         messages = [{"role": "system", "content": system + "\n\n" + cl.PROMPT},
                     {"role": "user", "content": question}]
         try:
-            if self.llm is None:
-                raise LLMError("IA non configurée : ⚙ Réglages → IA")
-            text = "".join(self.llm.stream(messages, alive=lambda: gen == self.gen, fast=True,
-                                           on_retry=self._on_retry))
+            text = "".join(self._stream(messages, gen, True))
         except LLMError as e:
             self._beep(2)
             self.overlay.append(f"\n{e}\n", "err")
@@ -572,11 +590,7 @@ class App:
         splitter = SentenceSplitter()
         full, cancelled = [], False
         try:
-            if self.llm is None:
-                raise LLMError("IA non configurée : ⚙ Réglages → IA")
-            fast = self.cfg["llm"].get("fast", True)
-            for delta in self.llm.stream(messages, alive=lambda: gen == self.gen, fast=fast,
-                                         on_retry=self._on_retry):
+            for delta in self._stream(messages, gen, self.cfg["llm"].get("fast", True)):
                 if gen != self.gen:
                     cancelled = True
                     break

@@ -72,7 +72,7 @@ Fournisseurs d'IA proposés (tous via leur API compatible OpenAI) :
 | OpenRouter | openrouter.ai/keys | `openai/gpt-4.1-mini` |
 | Autre | Open WebUI, LM Studio… | à renseigner |
 
-Si le service est surchargé (erreur 429/503, fréquent sur Gemini aux heures de pointe), l'appli réessaie deux fois puis passe au **modèle de secours** s'il est renseigné (ex. principal `gemini-2.5-pro`, secours `gemini-2.5-flash`).
+Si le service est surchargé (erreur 503), l'appli réessaie deux fois puis passe aux **modèles de secours** (liste séparée par des virgules). **Quota gratuit du jour épuisé** (Gemini gratuit : ~20 requêtes/jour *par modèle*) : pas de nouvel essai inutile, le modèle est sauté jusqu'à son retour et les modèles de secours prennent le relais (chaque modèle Gemini a son propre quota), puis le **fournisseur de secours** (ex. Groq, gratuit).
 
 Les clés de chaque fournisseur sont conservées : changer d'IA ne fait pas perdre les autres. Au lieu de saisir la clé, tu peux aussi définir `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` ou `OPENROUTER_API_KEY`. Pour la voix en vol, préfère les modèles rapides (« mini », « flash », « fast ») : les modèles de raisonnement sont plus justes mais mettent plusieurs secondes à répondre.
 
