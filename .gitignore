@@ -1,0 +1,13 @@
+# Environnement Python
+.venv/
+__pycache__/
+*.pyc
+
+# Config locale : contient les clés API
+config.json
+
+# Fichiers générés / téléchargés
+logs/
+voices/
+*.part
+*.swp

@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""DCS Copilote — assistant vocal d'apprentissage pour DCS World.
+
+Tous les réglages se font dans l'interface (bouton ⚙ de l'overlay). Commandes optionnelles :
+
+  python main.py                      lance l'assistant
+  python main.py --bind               associe le bouton push-to-talk (touche ou HOTAS)
+  python main.py --devices            liste micros, sorties audio et joysticks
+  python main.py --ask "question"     teste la config IA sans micro
+  python main.py --models             liste les modèles du fournisseur IA
+  python main.py --provider gemini --model gemini-2.5-pro   change d'IA pour ce lancement
+  python main.py --download-voice fr_FR-siwis-medium   télécharge une voix Piper
+"""
+import argparse
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+os.chdir(HERE)
+sys.path.insert(0, HERE)
+
+from dcs_copilote import config as cfgmod  # noqa: E402
+
+CFG_PATH = os.path.join(HERE, "config.json")
+
+
+def cmd_bind(cfg):
+    from dcs_copilote.ptt import capture_binding
+    print("Appuie sur la touche clavier ou le bouton HOTAS à utiliser pour parler (20 s)…")
+    b = capture_binding()
+    if not b:
+        print("Rien détecté.")
+        return 1
+    cfg["ptt"].update(b)
+    cfgmod.save(CFG_PATH, cfg)
+    if b["type"] == "keyboard":
+        print(f"OK : touche « {b['key']} » enregistrée.")
+    else:
+        print(f"OK : bouton {b['button'] + 1} de « {b['joystick_name']} » enregistré.")
+    print("Pense à vérifier que ce bouton n'est assigné à rien dans DCS.")
+    return 0
+
+
+def cmd_devices():
+    import sounddevice as sd
+    print("=== Audio (index : nom) ===")
+    for i, d in enumerate(sd.query_devices()):
+        io = ("E" if d["max_input_channels"] else "-") + ("S" if d["max_output_channels"] else "-")
+        print(f"  {i:3d} [{io}] {d['name']}")
+    print(f"  défaut : entrée {sd.default.device[0]}, sortie {sd.default.device[1]}")
+    try:
+        from dcs_copilote.ptt import list_joysticks
+        print("=== Joysticks ===")
+        for i, name, n in list_joysticks():
+            print(f"  {i}: {name} ({n} boutons)")
+    except Exception as e:  # noqa: BLE001
+        print(f"(joysticks : {e})")
+    return 0
+
+
+def cmd_ask(cfg, question, aircraft):
+    from dcs_copilote.llm import LLMClient, LLMError
+    from dcs_copilote.prompts import system_prompt
+    msgs = [{"role": "system", "content": system_prompt(aircraft, None, "vol", cfg["llm"].get("answer_length", "courte"),
+                                                         cfg["llm"].get("custom_prompt", ""))},
+            {"role": "user", "content": question}]
+    try:
+        for d in LLMClient(cfg["llm"]).stream(msgs):
+            print(d, end="", flush=True)
+        print()
+    except LLMError as e:
+        print(f"\nErreur : {e}")
+        return 1
+    return 0
+
+
+def cmd_models(cfg):
+    from dcs_copilote.llm import LLMClient, LLMError
+    try:
+        client = LLMClient(cfg["llm"])
+        ids = client.models()
+    except LLMError as e:
+        print(f"Erreur : {e}")
+        return 1
+    print(f"=== {client.cfg['provider']} ({client.base}) — actuel : {client.cfg['model']} ===")
+    for m in ids:
+        print(f"  {m}")
+    return 0
+
+
+def cmd_download_voice(name):
+    from dcs_copilote.audio import download_voice
+    print(f"Téléchargement de {name}…")
+    print(f"OK → {download_voice(name)}")
+    return 0
+
+
+def main():
+    p = argparse.ArgumentParser(description="DCS Copilote")
+    p.add_argument("--bind", action="store_true")
+    p.add_argument("--devices", action="store_true")
+    p.add_argument("--ask")
+    p.add_argument("--aircraft", default=None, help="appareil pour --ask")
+    p.add_argument("--download-voice", metavar="NOM")
+    p.add_argument("--models", action="store_true", help="liste les modèles du fournisseur IA")
+    p.add_argument("--provider", help="fournisseur IA pour ce lancement (ollama, openai, gemini, grok…)")
+    p.add_argument("--model", help="modèle IA pour ce lancement")
+    a = p.parse_args()
+
+    first_run = not os.path.exists(CFG_PATH)
+    cfg = cfgmod.load(CFG_PATH)
+    if first_run:
+        cfgmod.save(CFG_PATH, cfg)
+        print("config.json créé avec les valeurs par défaut — réglages : bouton ⚙ de l'overlay.")
+    # surcharges pour ce lancement uniquement (non enregistrées dans config.json)
+    llm = cfg["llm"]
+    if a.provider:
+        llm["provider"] = a.provider
+    if a.model:
+        llm.setdefault("providers", {}).setdefault(llm["provider"], {})["model"] = a.model
+
+    if a.bind:
+        return cmd_bind(cfg)
+    if a.devices:
+        return cmd_devices()
+    if a.ask:
+        return cmd_ask(cfg, a.ask, a.aircraft)
+    if a.download_voice:
+        return cmd_download_voice(a.download_voice)
+    if a.models:
+        return cmd_models(cfg)
+
+    from dcs_copilote import logfile
+    logfile.setup()
+    from dcs_copilote import ui_kit
+    qapp = ui_kit.application()
+    lock = ui_kit.single_instance()
+    if lock is None:
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(None, "DCS Copilote", "DCS Copilote est déjà lancé.")
+        return 0
+    from dcs_copilote.app import App
+    App(cfg, CFG_PATH, first_run).run()
+    del qapp, lock
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

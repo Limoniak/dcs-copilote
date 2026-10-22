@@ -1,0 +1,86 @@
+# DCS Copilote
+
+Instructeur IA pour DCS World (Windows / Linux). Tu maintiens un bouton (clavier ou HOTAS), tu poses ta question à voix haute, la réponse s'affiche dans un overlay et est lue au casque. L'appareil piloté est détecté automatiquement via `Export.lua`.
+
+```
+[bouton PTT] → micro → Whisper (local) → LLM compatible OpenAI (streaming) → overlay + Piper (voix locale)
+                                            ↑
+                    DCS Export.lua → UDP 127.0.0.1:7779 (appareil, altitude, vitesse)
+```
+
+- **Appui** : bip, enregistrement. Un nouvel appui coupe la réponse en cours.
+- **Question vocale** = mode *vol* : 1 à 3 phrases, lues au fur et à mesure qu'elles arrivent.
+- **Question tapée** dans l'overlay = mode *sol* : réponse détaillée, non lue (sauf `speak_typed`).
+- Contexte conservé sur 6 échanges (« et ensuite ? » fonctionne), remis à zéro au changement d'appareil ou avec ↺.
+
+## Installation
+
+**Windows** (Python 3.11/3.12) : `install.bat`, puis `run.bat`.
+
+**Linux** :
+```bash
+sudo apt install python3-venv libportaudio2 libxcb-cursor0 espeak-ng
+./install.sh && ./run.sh
+```
+
+## Interface
+
+Overlay semi-transparent toujours au premier plan (Qt / PySide6) : appareil, réponse affichée au fil de l'eau (mise en forme Markdown), champ de question, pastille d'état (vert prêt · rouge écoute · ambre réflexion). Fais-le glisser par son en-tête ; sa position est mémorisée.
+
+- **Micro** à droite du champ : maintiens-le pour parler (pratique pour tester sans bouton PTT).
+- **Répéter** relit la dernière réponse ; **Détailler** demande la version complète.
+- **Haut-parleur** : lire ou non les réponses aux questions tapées.
+- Icône dans la **zone de notification** (si le bureau en a une) : afficher / masquer l'overlay, réglages, quitter.
+- Une seule instance à la fois ; journal dans `logs/dcs-copilote.log` (bouton « Ouvrir le journal » des réglages).
+
+## Réglages — bouton ⚙ de l'overlay
+
+Tout se configure dans la fenêtre **Réglages** (bouton ⚙ de l'overlay), qui s'ouvre toute seule au premier lancement ou quand la clé de l'IA choisie manque. « Enregistrer » applique les changements immédiatement, sans redémarrer.
+
+| Onglet | Contenu |
+|---|---|
+| **IA** | Fournisseur, adresse, clé API, modèle et modèle de secours (« Lister »), longueur des réponses vocales (1 phrase · 2-3 · jusqu'à 6, toujours 15 mots max par phrase), consignes personnelles ajoutées au prompt, température, mémoire, « Tester l'IA » |
+| **Voix** | Whisper (modèle, CPU/GPU, langue) ; synthèse vocale : **Microsoft** (voix neuronales naturelles, gratuites, en ligne), **OpenAI** (payant, clé OpenAI), **Piper** (local) ou voix système ; débit, « Tester la voix ». Les voix en ligne retombent sur Piper si le service ne répond pas. |
+| **Audio** | Micro, sortie casque, bips |
+| **Bouton PTT** | « Assigner… » puis appuie sur la touche ou le bouton HOTAS voulu |
+| **DCS & Overlay** | Dossier Saved Games/DCS, installation du script DCS en un clic, port UDP ; opacité, taille du texte, lignes, largeur, sans bordure |
+
+Fournisseurs d'IA proposés (tous via leur API compatible OpenAI) :
+
+| Fournisseur | Où obtenir la clé | Modèle par défaut |
+|---|---|---|
+| Ollama (local) | aucune clé | `qwen2.5:14b` |
+| ChatGPT (OpenAI) | platform.openai.com/api-keys | `gpt-4.1-mini` |
+| Google Gemini | aistudio.google.com/apikey | `gemini-2.5-flash` |
+| Grok (xAI) | console.x.ai | `grok-4-fast-non-reasoning` |
+| OpenRouter | openrouter.ai/keys | `openai/gpt-4.1-mini` |
+| Autre | Open WebUI, LM Studio… | à renseigner |
+
+Si le service est surchargé (erreur 429/503, fréquent sur Gemini aux heures de pointe), l'appli réessaie deux fois puis passe au **modèle de secours** s'il est renseigné (ex. principal `gemini-2.5-pro`, secours `gemini-2.5-flash`).
+
+Les clés de chaque fournisseur sont conservées : changer d'IA ne fait pas perdre les autres. Au lieu de saisir la clé, tu peux aussi définir `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` ou `OPENROUTER_API_KEY`. Pour la voix en vol, préfère les modèles rapides (« mini », « flash », « fast ») : les modèles de raisonnement sont plus justes mais mettent plusieurs secondes à répondre.
+
+Le PTT est lu même quand DCS a le focus : choisis un bouton **non assigné dans DCS**.
+
+L'installation du script DCS copie `DCSAssistant.lua` dans `Saved Games/DCS/Scripts/` et ajoute à `Export.lua` (sauvegardé en `Export.lua.bak`) la ligne :
+```lua
+pcall(function() local l=require('lfs'); dofile(l.writedir()..[[Scripts\DCSAssistant.lua]]) end)
+```
+Compatible SRS, Tacview, Helios… (fonctions chaînées). Sans le script, choisis l'appareil dans le menu de l'overlay.
+
+### Avancé : `config.json` et ligne de commande
+
+Les réglages sont enregistrés dans `config.json` (modifiable à la main ; dict `extra` par fournisseur ajouté tel quel à la requête, ex. `{"reasoning_effort": "low"}`). Commandes utiles pour dépanner :
+
+```bash
+python main.py --ask "Comment je démarre l'APU ?" --aircraft "F/A-18C Hornet"   # test sans micro
+python main.py --models                              # modèles du fournisseur actif
+python main.py --provider grok --model grok-4        # changer d'IA pour ce lancement seulement
+python main.py --devices | --bind | --download-voice fr_FR-siwis-medium
+```
+
+## Limites
+
+- **Fiabilité des réponses** : elle dépend entièrement du modèle. Les petits modèles locaux (7-14B) inventent volontiers des noms d'interrupteurs ou des raccourcis ; un gros modèle cloud est nettement plus fiable sur les procédures DCS. Le prompt demande à l'IA de signaler ses incertitudes, mais vérifie avant de t'y fier.
+- **Overlay** invisible en plein écran exclusif et en VR → utilise le mode fenêtré sans bordure, ou fie-toi à la voix.
+- **Linux/Wayland** : la touche clavier globale (pynput) ne fonctionne qu'avec X11/XWayland ; préfère un bouton HOTAS.
