@@ -74,6 +74,8 @@ _ICONS = {
                  '<path d="M14 2v4M8 10v4M16 18v4"/>'),
     "volume": '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>',
     "volume-off": '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/>',
+    "book": ('<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5'
+             'a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>'),
     "plus": '<path d="M5 12h14"/><path d="M12 5v14"/>',
     "send": '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
     "sparkles": ('<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>'
@@ -191,6 +193,8 @@ QPushButton#chip:hover {{ color: {TEXT}; border-color: #3a4452; background: rgba
 QToolButton#mic {{ background: {RAISED}; border: 1px solid {BORDER}; border-radius: 18px; }}
 QToolButton#mic:hover {{ border-color: #3a4452; }}
 QToolButton#mic:pressed {{ background: rgba(251,113,133,0.25); border-color: {LISTEN}; }}
+QProgressBar {{ background: {RAISED}; border: none; border-radius: 4px; max-height: 8px; }}
+QProgressBar::chunk {{ background: {ACCENT}; border-radius: 4px; }}
 QMenu {{ background: {RAISED}; border: 1px solid {BORDER}; border-radius: 8px; padding: 4px; }}
 QMenu::item {{ padding: 6px 18px; border-radius: 6px; }}
 QMenu::item:selected {{ background: #24453a; }}

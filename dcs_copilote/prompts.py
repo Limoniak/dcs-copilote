@@ -64,7 +64,16 @@ def flight_situation(f):
     return "Situation actuelle (données DCS) : " + ", ".join(items) + "."
 
 
-def system_prompt(aircraft, flight, mode, length="courte", custom=""):
+def manual_block(context, mode):
+    cite = ("Quand tu t'appuies sur un extrait, cite sa page entre parenthèses, par exemple (p. 123)."
+            if mode != "vol" else "Ne cite pas les pages : le pilote écoute.")
+    return ("Extraits des manuels de l'appareil, ta source la plus fiable :\n"
+            "- Base-toi d'abord sur eux et ne les contredis pas.\n"
+            "- S'ils ne couvrent pas la question, réponds avec tes connaissances en le signalant.\n"
+            f"- {cite}\n\n{context}")
+
+
+def system_prompt(aircraft, flight, mode, length="courte", custom="", manual=""):
     parts = [BASE]
     if aircraft:
         parts.append(f"Appareil actuellement piloté : {aircraft}. Réponds pour cet appareil sauf si le pilote en cite un autre.")
@@ -77,6 +86,8 @@ def system_prompt(aircraft, flight, mode, length="courte", custom=""):
                      f"Longueur : {VOL_LENGTH.get(length, VOL_LENGTH['courte'])}\n\n{SPOKEN_STYLE}")
     else:
         parts.append(MODE_SOL)
+    if manual:
+        parts.append(manual_block(manual, mode))
     if custom and custom.strip():
         parts.append("Consignes du pilote (prioritaires) :\n" + custom.strip())
     return "\n\n".join(parts)

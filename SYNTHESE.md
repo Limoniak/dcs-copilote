@@ -6,6 +6,7 @@ Assistant IA d'apprentissage pour DCS World. On maintient un bouton (clavier ou 
 
 | Brique | Choix | Pourquoi |
 |---|---|---|
+| Manuels | PyMuPDF + fastembed (`paraphrase-multilingual-MiniLM-L12-v2`) + BM25, local | Question FR → passage du manuel EN, filtré sur l'appareil piloté |
 | IA | API compatible OpenAI (`/chat/completions`, streaming SSE), préréglages par fournisseur | Un seul client pour Ollama, ChatGPT, Gemini, Grok, OpenRouter, Open WebUI… |
 | Voix → texte | faster-whisper, local, CPU int8 | Gratuit, hors-ligne, ne prend pas de VRAM à DCS |
 | Texte → voix | Microsoft Edge (edge-tts, en ligne), OpenAI TTS, Piper (local), pyttsx3 (SAPI / espeak) ; repli auto sur Piper | Voix neuronales naturelles ; Piper garantit le hors-ligne |
@@ -59,6 +60,7 @@ dcs-copilote/
     ├── settings.py         Fenêtre Réglages (onglets IA, Voix, Audio, Bouton PTT, DCS & Overlay)
     ├── dcs_install.py      Détection de Saved Games/DCS, installation du script + ligne Export.lua
     ├── prompts.py          Prompt système : base + mode vol (longueur réglable, phrases ≤ 15 mots) / sol + consignes perso
+    ├── manuals.py          Manuels PDF : indexation (PyMuPDF + embeddings multilingues fastembed) et recherche hybride
     ├── logfile.py          Journal logs/dcs-copilote.log (horodaté) + capture des exceptions
     ├── textutil.py         Découpage en phrases + nettoyage pour la voix (kt → nœuds…)
     └── aircraft.py         Noms internes DCS → noms lisibles + liste du menu
@@ -126,7 +128,7 @@ python main.py --download-voice fr_FR-siwis-medium
 
 ## Pistes d'évolution
 
-- **RAG sur les manuels** : indexer les PDF de `DCS World/Mods/aircraft/*/Doc/` (et Chuck's Guides), injecter les passages pertinents dans le prompt → la plus grosse amélioration de fiabilité.
+- Manuels : relancer l'indexation automatiquement quand un module est ajouté ou mis à jour.
 - Armement sélectionné dans les données Lua (dépend du module).
 - Mode checklist : l'assistant déroule une procédure étape par étape, « suivant » au PTT.
 - Packaging : exécutable Windows avec PyInstaller.

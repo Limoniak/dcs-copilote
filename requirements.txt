@@ -9,3 +9,5 @@ pygame>=2.5
 PySide6-Essentials>=6.6
 edge-tts>=6.1
 miniaudio>=1.59
+fastembed>=0.4
+pymupdf>=1.24

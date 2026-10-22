@@ -33,6 +33,12 @@ Overlay semi-transparent toujours au premier plan (Qt / PySide6) : appareil, ré
 - Icône dans la **zone de notification** (si le bureau en a une) : afficher / masquer l'overlay, réglages, quitter.
 - Une seule instance à la fois ; journal dans `logs/dcs-copilote.log` (bouton « Ouvrir le journal » des réglages).
 
+## Manuels : des réponses fiables
+
+Sans manuel, l'IA répond de mémoire et peut inventer des noms d'interrupteurs. Dans **⚙ Réglages → Manuels**, indexe les PDF officiels de tes modules (`DCS World/Mods/aircraft/*/Doc/`) et, si tu veux, un dossier perso (Chuck's Guides…). À chaque question, les passages les plus utiles **du manuel de l'appareil piloté** sont donnés à l'IA, et les sources (document, page) s'affichent sous la réponse.
+
+La recherche est sémantique et multilingue : une question en français trouve le bon passage du manuel anglais (modèle local `paraphrase-multilingual-MiniLM-L12-v2`, ~220 Mo, téléchargé au premier usage), complétée par une recherche par mots-clés pour les termes exacts du cockpit. Tout reste local ; l'index est dans `data/manuals/`.
+
 ## Réglages — bouton ⚙ de l'overlay
 
 Tout se configure dans la fenêtre **Réglages** (bouton ⚙ de l'overlay), qui s'ouvre toute seule au premier lancement ou quand la clé de l'IA choisie manque. « Enregistrer » applique les changements immédiatement, sans redémarrer.
@@ -40,6 +46,7 @@ Tout se configure dans la fenêtre **Réglages** (bouton ⚙ de l'overlay), qui 
 | Onglet | Contenu |
 |---|---|
 | **IA** | Fournisseur, adresse, clé API, modèle et modèle de secours (« Lister »), longueur des réponses vocales (1 phrase · 2-3 · jusqu'à 6, toujours 15 mots max par phrase), consignes personnelles ajoutées au prompt, température, mémoire, « Tester l'IA » |
+| **Manuels** | Dossier de DCS World (détecté : standalone ou Steam) et dossier de PDF perso ; « Indexer les manuels » (une fois, barre de progression) ; « Tester la recherche » pour voir les passages que l'IA recevra |
 | **Voix** | Whisper (modèle, CPU/GPU, langue) ; synthèse vocale : **Microsoft** (voix neuronales naturelles, gratuites, en ligne), **OpenAI** (payant, clé OpenAI), **Piper** (local) ou voix système ; débit, « Tester la voix ». Les voix en ligne retombent sur Piper si le service ne répond pas. |
 | **Audio** | Micro, sortie casque, bips |
 | **Bouton PTT** | « Assigner… » puis appuie sur la touche ou le bouton HOTAS voulu |

@@ -59,6 +59,9 @@ class App:
         self.ptt = None
         self.start_ptt()
 
+        from .manuals import Manuals
+        self.manuals = Manuals(self.log)
+        threading.Thread(target=self.load_manuals, daemon=True).start()
         threading.Thread(target=self._load_stt, daemon=True).start()
         threading.Thread(target=self._worker, daemon=True).start()
 
@@ -157,6 +160,8 @@ class App:
             self.dcs.join(timeout=3)
             self.dcs = self._DCSLink(int(cfg["dcs"]["udp_port"]), self.on_dcs, self.log)
             self.dcs.start()
+        if cfg["manuals"].get("enabled") and not old["manuals"].get("enabled"):
+            self.load_manuals()
         if cfg["stt"] != old["stt"]:
             self._load_stt()
         elif self.stt is not None:
@@ -191,6 +196,33 @@ class App:
         msg = self._ready_status()
         print(msg, flush=True)
         self.overlay.set_status(msg, state="ready")
+
+    def load_manuals(self):
+        if not self.cfg["manuals"].get("enabled", True):
+            return
+        try:
+            if self.manuals.load():
+                s = self.manuals.summary()
+                print(f"Manuels : {s['docs']} documents, {s['chunks']} extraits", flush=True)
+        except Exception as e:  # noqa: BLE001
+            self.log(f"Manuels indisponibles : {e}", error=True)
+
+    def _manual_context(self, question):
+        """Passages des manuels pour la question (+ la précédente si c'est une relance courte)."""
+        from .manuals import format_context, sources_line
+        if not (self.cfg["manuals"].get("enabled", True) and self.manuals.ready):
+            return "", ""
+        query = question
+        if len(question.split()) < 6:
+            prev = [m["content"] for m in self.history if m["role"] == "user"]
+            if prev:
+                query = prev[-1] + " " + question
+        try:
+            res = self.manuals.search(query, self.current_aircraft(), int(self.cfg["manuals"].get("top_k", 4)))
+        except Exception as e:  # noqa: BLE001
+            print(f"[manuels] recherche impossible : {e}", flush=True)
+            return "", ""
+        return format_context(res), sources_line(res)
 
     def _load_stt(self):
         from .stt import STT
@@ -314,9 +346,10 @@ class App:
 
     def _answer(self, question, mode, speak, gen):
         flight = self.dcs.snapshot()
+        manual, sources = self._manual_context(question)
         messages = [{"role": "system", "content": system_prompt(
             self.current_aircraft(), flight, mode, self.cfg["llm"].get("answer_length", "courte"),
-            self.cfg["llm"].get("custom_prompt", ""))}]
+            self.cfg["llm"].get("custom_prompt", ""), manual)}]
         messages += list(self.history)
         messages.append({"role": "user", "content": question})
 
@@ -353,6 +386,8 @@ class App:
             self.history.append({"role": "assistant", "content": answer})
             self.last_answer = answer
             self.overlay.show_actions(True)
+            if sources:
+                self.overlay.info(sources)
         self._ready()
 
     def run(self):

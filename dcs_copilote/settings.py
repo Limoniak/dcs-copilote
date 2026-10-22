@@ -8,7 +8,7 @@ import threading
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
-                               QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSlider, QSpinBox,
+                               QLabel, QLineEdit, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox,
                                QStackedWidget, QToolButton, QVBoxLayout, QWidget)
 
 from . import ui_kit as ui
@@ -234,7 +234,8 @@ class SettingsWindow(QWidget):
 
         self.stack = QStackedWidget()
         self.nav = QButtonGroup(self)
-        pages = (("IA", "sparkles", self._page_llm), ("Voix", "voice", self._page_voice),
+        pages = (("IA", "sparkles", self._page_llm), ("Manuels", "book", self._page_manuals),
+                 ("Voix", "voice", self._page_voice),
                  ("Audio", "headphones", self._page_audio), ("Bouton PTT", "mic", self._page_ptt),
                  ("DCS", "plane", self._page_dcs), ("Overlay", "monitor", self._page_overlay))
         for i, (name, ic, build) in enumerate(pages):
@@ -517,6 +518,145 @@ class SettingsWindow(QWidget):
             else:
                 _show(self.llm_result, f"✓ {res[:300]}", "ok")
         self._bg(work, done)
+
+    # ------------------------------------------------------------------ Manuels
+    def _page_manuals(self):
+        from .manuals import dcs_install_candidates
+        w, lay = self._page("Manuels", "L'instructeur s'appuie sur les manuels PDF de tes modules : réponses "
+                                        "bien plus fiables, avec la page source.")
+        m = self.c["manuals"]
+        card = Card("Sources")
+        self.t_manuals = card.add("Utiliser les manuels", Toggle(m.get("enabled", True)),
+                                  "Les passages utiles sont donnés à l'IA à chaque question.", stretch=False)
+        cands = dcs_install_candidates()
+        self.cb_dcsdir = card.add("Dossier de DCS World", self._folder_row(
+            _combo(cands, m.get("dcs_dir") or (cands[0] if cands else ""), editable=True)),
+            "Celui qui contient Mods/aircraft (manuels officiels des modules).").box
+        self.e_extra = card.add("Dossier de PDF perso", self._folder_row(QLineEdit(m.get("extra_dir", ""))),
+                                "Facultatif : Chuck's Guides, checklists… Le nom du fichier doit contenir "
+                                "l'appareil (ex. « F-16C »).").box
+        irow = QHBoxLayout()
+        self.b_index = QPushButton("Indexer les manuels")
+        self.b_index.setObjectName("primary")
+        self.b_index.setIcon(icon("book", ui.BASE, 15))
+        self.b_index.clicked.connect(self._index_manuals)
+        irow.addWidget(self.b_index)
+        self.b_stop_index = QPushButton("Arrêter")
+        self.b_stop_index.setObjectName("ghost")
+        self.b_stop_index.hide()
+        self.b_stop_index.clicked.connect(lambda: setattr(self, "_stop_index", True))
+        irow.addWidget(self.b_stop_index)
+        irow.addStretch(1)
+        card.lay.addLayout(irow)
+        self.index_bar = QProgressBar()
+        self.index_bar.setTextVisible(False)
+        self.index_bar.hide()
+        card.add_widget(self.index_bar)
+        self.index_result = card.add_widget(_result())
+        s = self.app.manuals.summary() if self.app.manuals.ready else None
+        _show(self.index_result, self._summary_text(s) if s else "Aucun manuel indexé pour l'instant.")
+        lay.addWidget(card)
+
+        test = Card("Tester la recherche", "Ce que l'IA recevrait pour cette question, avec l'appareil actuel.")
+        trow = QHBoxLayout()
+        self.e_query = QLineEdit()
+        self.e_query.setPlaceholderText("Ex. : comment je démarre l'APU ?")
+        self.e_query.returnPressed.connect(self._test_search)
+        trow.addWidget(self.e_query, 1)
+        b = QPushButton("Chercher")
+        b.clicked.connect(self._test_search)
+        trow.addWidget(b)
+        test.lay.addLayout(trow)
+        self.search_result = test.add_widget(_result())
+        lay.addWidget(test)
+        lay.addWidget(_label("L'indexation se fait une fois (quelques minutes pour beaucoup de modules) ; "
+                             "relance-la après l'achat ou la mise à jour d'un module. Le modèle de recherche "
+                             "(~220 Mo) est téléchargé au premier usage.", muted=True, wrap=True))
+        lay.addStretch(1)
+        return w
+
+    def _folder_row(self, field):
+        roww = QWidget()
+        rl = QHBoxLayout(roww)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.addWidget(field, 1)
+        b = QPushButton()
+        b.setIcon(icon("folder", TEXT, 16))
+        b.setToolTip("Parcourir…")
+        get = field.currentText if isinstance(field, QComboBox) else field.text
+        put = field.setEditText if isinstance(field, QComboBox) else field.setText
+
+        def browse():
+            d = QFileDialog.getExistingDirectory(self, "Choisir un dossier", get() or os.path.expanduser("~"))
+            if d:
+                put(d)
+        b.clicked.connect(browse)
+        rl.addWidget(b)
+        roww.box, roww.get = roww, get       # .box : la ligne (pour Card.add), .get : valeur
+        return roww
+
+    @staticmethod
+    def _summary_text(s):
+        mods = ", ".join(f"{k} ({v})" for k, v in sorted(s["modules"].items()))
+        return f"✓ {s['docs']} documents indexés, {s['chunks']} extraits — {mods}"
+
+    def _index_manuals(self):
+        from .manuals import build_index, find_pdfs
+        dcs_dir, extra = self.cb_dcsdir.get().strip(), self.e_extra.get().strip()
+        pdfs = find_pdfs(dcs_dir, extra)
+        if not pdfs:
+            _show(self.index_result, "Aucun PDF trouvé : vérifie le dossier de DCS World (il doit contenir "
+                                     "Mods/aircraft) ou le dossier perso.", "err")
+            return
+        self.c["manuals"].update(dcs_dir=dcs_dir, extra_dir=extra)
+        self._stop_index = False
+        self.b_index.setEnabled(False)
+        self.b_stop_index.show()
+        self.index_bar.show()
+        self.index_bar.setValue(0)
+        _show(self.index_result, f"{len(pdfs)} PDF trouvés…")
+
+        def progress(done, total, msg):
+            def f():
+                if self.alive():
+                    self.index_bar.setMaximum(max(1, total))
+                    self.index_bar.setValue(done)
+                    _show(self.index_result, msg)
+            self.call(f)
+
+        def work():
+            s = build_index(pdfs, progress, lambda: self._stop_index)
+            self.app.load_manuals()
+            return s
+
+        def done(res):
+            self.b_index.setEnabled(True)
+            self.b_stop_index.hide()
+            self.index_bar.hide()
+            if isinstance(res, Exception):
+                _show(self.index_result, f"Indexation impossible : {res}", "err")
+            else:
+                _show(self.index_result, self._summary_text(res), "ok")
+        self._bg(work, done)
+
+    def _test_search(self):
+        from .manuals import sources_line
+        q = self.e_query.text().strip()
+        if not q:
+            return
+        if not self.app.manuals.ready:
+            _show(self.search_result, "Indexe d'abord les manuels.", "err")
+            return
+        ac = self.app.current_aircraft()
+        res = self.app.manuals.search(q, ac, int(self.c["manuals"].get("top_k", 4)))
+        if not res:
+            _show(self.search_result, f"Rien de pertinent pour « {ac or 'tous appareils'} ». "
+                                      "L'IA répondra de mémoire.", "err")
+            return
+        lines = [f"{sources_line(res)}  (appareil : {ac or 'tous'})", ""]
+        for score, c, d in res:
+            lines.append(f"p. {c['page']} — {c['text'][:220].strip()}…")
+        _show(self.search_result, "\n".join(lines), "muted")
 
     # ------------------------------------------------------------------ Voix
     def _page_voice(self):
@@ -916,6 +1056,8 @@ class SettingsWindow(QWidget):
         for key, (cb, mapping) in self.devices.items():
             c["audio"][key] = mapping.get(cb.currentText())
         c["audio"]["beeps"] = self.t_beeps.isChecked()
+        c["manuals"].update(enabled=self.t_manuals.isChecked(), dcs_dir=self.cb_dcsdir.get().strip(),
+                            extra_dir=self.e_extra.get().strip())
         c["dcs"].update(udp_port=self.s_port.value(), saved_games=self.cb_saved.currentText().strip())
         c["overlay"].update(self._overlay_values())
 

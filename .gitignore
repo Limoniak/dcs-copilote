@@ -9,5 +9,7 @@ config.json
 # Fichiers générés / téléchargés
 logs/
 voices/
+data/
+models/
 *.part
 *.swp

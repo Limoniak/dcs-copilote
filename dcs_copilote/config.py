@@ -57,6 +57,12 @@ DEFAULTS = {
         "joystick_guid": "",
         "button": 0,
     },
+    "manuals": {
+        "enabled": True,           # appuyer les réponses sur les manuels PDF indexés
+        "dcs_dir": "",             # dossier d'installation de DCS World (Mods/aircraft/*/Doc)
+        "extra_dir": "",           # dossier de PDF perso (Chuck's Guides…)
+        "top_k": 4,
+    },
     "dcs": {
         "udp_port": 7779,
         "saved_games": "",         # dossier Saved Games/DCS (installation du script depuis les réglages)
