@@ -51,7 +51,7 @@ L'overlay est invisible en VR et en plein écran exclusif : il ne reste que la v
 - [x] GitHub Actions à chaque push (`.github/workflows/tests.yml`)
 
 ## 8. Petits plus
-- [ ] Réindexer automatiquement les manuels officiels après une mise à jour de DCS
+- [x] Réindexer automatiquement les manuels officiels après une mise à jour de DCS (au lancement, seuls les PDF modifiés)
 - [ ] Suivi de la consommation des API payantes
 - [ ] Historique des questions, exportable en notes
 - [ ] Interface en anglais
