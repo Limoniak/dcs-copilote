@@ -251,6 +251,14 @@ class LLMClient:
                 if status not in RETRY_STATUS:
                     raise LLMError(err, "auth" if status in (401, 403) else "other")
                 per_day, delay = _quota_info(text) if status == 429 else (False, None)
+                wait = float(r.headers.get("Retry-After") or 0) if status == 429 else 0
+                if wait > 2 and len(usable) > i:
+                    # limite par minute (Groq : jetons/min) : le secours répond tout de suite, ce modèle
+                    # revient quand la fenêtre est passée, plutôt que de faire attendre le pilote
+                    _exhausted[(prov, model)] = time.monotonic() + wait
+                    kind = "quota"
+                    print(f"[IA] {model} : limite atteinte, de retour dans {wait:.0f} s → secours", flush=True)
+                    break
                 if per_day or (delay and delay > 10):
                     # quota épuisé pour longtemps : inutile de réessayer ce modèle
                     _exhausted[(prov, model)] = time.monotonic() + (delay or 3600)

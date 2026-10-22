@@ -31,6 +31,39 @@ def _tokens(text):
     return [w.lower() for w in _WORD.findall(text)]
 
 
+# Les manuels anglais sont souvent plus complets que leurs traductions (le décollage sur piste du Hornet manque
+# au guide FR) : la question est aussi cherchée avec ses termes clés en anglais, sans appel à l'IA. Décollage et
+# atterrissage visent la piste (règle des consignes : pas de porte-avions supposé) ; « appontage » vise le porte-avions.
+FR_EN = [(r"décoll\w*", "airfield takeoff"), (r"atterri\w*", "airfield landing"), (r"appont\w*", "carrier landing"),
+         (r"\bpiste\b", "runway"), (r"aérodrome", "airfield"), (r"roulage|\brouler\b", "taxi"),
+         (r"démarr\w*|mise en route", "start up"), (r"porte-avions", "carrier"), (r"ravitaill\w*", "refueling"),
+         (r"frein de (parking|stationnement)", "parking brake"), (r"\btrain\b", "landing gear"),
+         (r"\bvolets?\b", "flaps"), (r"aérofreins?", "speed brake"), (r"\bcrosse\b", "arresting hook"),
+         (r"carburant", "fuel"), (r"\bmoteurs?\b", "engine"), (r"\bbombes?\b", "bomb"), (r"\bcanon\b", "gun"),
+         (r"\bleurres?\b", "countermeasures"), (r"procédure", "procedure"), (r"désign\w*", "designate"),
+         (r"verrouill\w*", "lock"), (r"\blargu\w*", "release"), (r"pilote automatique", "autopilot"),
+         (r"\bthermiques?\b|infrarouges?", "IR"), (r"\bpanne\b", "failure"), (r"\bréglage\b|\bconfigurer\b", "set up")]
+
+
+TOC = re.compile(r"\.{6,}\s*\d+")
+
+
+def english_queries(question):
+    """Versions anglaises de la question : la phrase aux termes clés traduits, et ces termes seuls avec les noms
+    techniques (GBU-12, Maverick, APU…). Vide si aucun terme n'est traduit."""
+    found, sentence = [], question
+    carrier = re.search(r"porte-avions|appont|catapult|CVN", question, flags=re.I)
+    for pat, en in FR_EN:
+        en = en.replace("airfield", "carrier") if carrier else en
+        found += [(m.start(), en) for m in re.finditer(pat, question, flags=re.I)]
+        sentence = re.sub(pat, en, sentence, flags=re.I)
+    if not found:
+        return []
+    technical = [(m.start(), m.group()) for m in re.finditer(r"\b[\w-]*(?:[A-Z]|\d)[\w-]*\b", question)
+                 if m.start() > 0]
+    return [sentence, " ".join(w for _pos, w in sorted(found + technical))]
+
+
 # --------------------------------------------------------------------------- emplacements
 def dcs_install_candidates():
     """Dossiers d'installation de DCS World trouvés (standalone ou Steam, Windows ou Linux/Proton)."""
@@ -318,25 +351,38 @@ class Manuals:
             mask = np.ones(len(self.chunks), bool) if docs is None else np.isin(self.doc_of, docs)
             mask &= self.lang_ok[self.doc_of]
             idx = np.flatnonzero(mask)
-            q = np.asarray(next(iter(self.model.query_embed([query]))), dtype=np.float32)
-            q /= np.linalg.norm(q) + 1e-9
-            sem = self.emb[idx] @ q
-            # pré-sélection sémantique, puis bonus mots-clés pour les termes exacts du cockpit
-            top = np.argsort(-sem)[:60]
-            kw = self._bm25(_tokens(query), idx[top])
-            if kw.max() > 0:
-                kw = kw / kw.max()
-            score = sem[top] + 0.15 * kw
-            order = np.argsort(-score)
+            # chunk → (score, similarité) : la question telle quelle, et avec ses termes clés en anglais
+            ranked = {}
+            for q_text in [query] + english_queries(query):
+                for i, score, sem in self._rank(q_text, idx):
+                    if i not in ranked or score > ranked[i][0]:
+                        ranked[i] = (score, sem)
+            # pages de sommaire (lignes « Titre ........ 81 ») : des titres, pas de contenu
+            order = [i for i in sorted(ranked, key=lambda i: -ranked[i][0])
+                     if len(TOC.findall(self.chunks[i]["text"])) < 3]
             out = []
-            best = sem[top[order[0]]]
-            for j in order[:k]:
+            best = ranked[order[0]][1] if order else 0
+            for i in order[:k]:
+                score, sem = ranked[i]
                 # hors sujet, ou nettement moins pertinent que le meilleur passage
-                if sem[top[j]] < MIN_SCORE or sem[top[j]] < best - 0.12:
+                if sem < MIN_SCORE or sem < best - 0.12:
                     continue
-                c = self.chunks[idx[top[j]]]
-                out.append((float(score[j]), c, self.docs[c["doc"]]))
+                c = self.chunks[i]
+                out.append((score, c, self.docs[c["doc"]]))
             return out
+
+    def _rank(self, query, idx):
+        """[(chunk, score, similarité)] : pré-sélection sémantique, puis bonus mots-clés pour les termes
+        exacts du cockpit."""
+        q = np.asarray(next(iter(self.model.query_embed([query]))), dtype=np.float32)
+        q /= np.linalg.norm(q) + 1e-9
+        sem = self.emb[idx] @ q
+        top = np.argsort(-sem)[:60]
+        kw = self._bm25(_tokens(query), idx[top])
+        if kw.max() > 0:
+            kw = kw / kw.max()
+        score = sem[top] + 0.15 * kw
+        return [(int(idx[t]), float(s), float(sem[t])) for t, s in zip(top, score)]
 
 
 def format_context(results, max_chars=3600):
