@@ -1,8 +1,8 @@
 """Overlay toujours au premier plan : appareil, réponse en direct, question tapée, état."""
 import html
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QPointF, Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QSizePolicy,
                                QSystemTrayIcon, QTextBrowser, QToolButton, QVBoxLayout, QWidget)
 
@@ -51,6 +51,48 @@ class DragArea(QWidget):
         self._drag = None
 
 
+class Grip(QWidget):
+    """Coin bas-droit : redimensionne l'overlay (largeur et hauteur maximale de la réponse)."""
+
+    def __init__(self, overlay):
+        super().__init__(overlay)
+        self.ov = overlay
+        self.setFixedSize(16, 16)
+        self.setCursor(Qt.SizeFDiagCursor)
+        self.setToolTip("Glisser pour redimensionner")
+        self._start = None
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(QColor(MUTED), 1.4))
+        for k in (5, 9, 13):
+            p.drawLine(QPointF(15, 15 - k), QPointF(15 - k, 15))
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self._start = (e.globalPosition(), int(self.ov.cfg["width"]), int(self.ov.cfg["lines"]))
+
+    def mouseMoveEvent(self, e):
+        if self._start is None:
+            return
+        pos, w, lines = self._start
+        d = e.globalPosition() - pos
+        line = self.ov.text.fontMetrics().lineSpacing()
+        self.ov.cfg["width"] = max(280, min(1600, round((w + d.x()) / 10) * 10))
+        self.ov.cfg["lines"] = max(1, min(50, lines + round(d.y() / line)))
+        self.ov.setFixedWidth(int(self.ov.cfg["width"]) + 2 * MARGIN)
+        self.ov.text.setVisible(True)
+        self.ov._fit(full=True)
+
+    def mouseReleaseEvent(self, _e):
+        if self._start is not None:
+            self._start = None
+            self.ov.text.setVisible(bool(self.ov.text.toPlainText().strip()))
+            self.ov._fit()
+            self.ov.on_resized({"width": self.ov.cfg["width"], "lines": self.ov.cfg["lines"]})
+
+
 class Overlay(QWidget):
     def __init__(self, cfg, choices, on_question, on_reset, on_aircraft, on_settings, on_quit,
                  on_speak=None, speak=False):
@@ -63,6 +105,7 @@ class Overlay(QWidget):
         # branchés par l'appli après construction
         self.on_mic_press = self.on_mic_release = self.on_repeat = self.on_more = lambda: None
         self.on_checklist = lambda cmd: None
+        self.on_resized = lambda values: None
         self.collapsed = False
         self._closing = False
         self._answer = ""
@@ -135,7 +178,7 @@ class Overlay(QWidget):
         self.text.setFrameShape(QTextBrowser.NoFrame)
         self.text.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.text.setStyleSheet("QTextBrowser { background: transparent; border: none; "
-                                "selection-background-color: rgba(52,211,153,0.35); selection-color: #e8edf3; }")
+                                "selection-background-color: rgba(61,139,255,0.35); selection-color: #e8edf3; }")
         self.text.document().setDocumentMargin(0)
         self.text.hide()
         bl.addWidget(self.text)
@@ -217,6 +260,7 @@ class Overlay(QWidget):
         st.addWidget(self.status, 1)
         root.addWidget(self.statusbar)
 
+        self.grip = Grip(self)
         self._render_timer = QTimer(self, interval=60, timeout=self._render)
         self._render_timer.start()
         self.apply_style(cfg)
@@ -225,6 +269,11 @@ class Overlay(QWidget):
         self.move(int(cfg["x"]), int(cfg["y"]))
 
     # ------------------------------------------------------------------ dessin
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self.grip.move(self.width() - MARGIN - 18, self.height() - MARGIN - 18)
+        self.grip.raise_()
+
     def paintEvent(self, _e):
         ui.paint_card(self, MARGIN, RADIUS, self.cfg["alpha"], self.cfg.get("bg_color", ui.BASE))
 
@@ -240,7 +289,7 @@ class Overlay(QWidget):
         self.tray = None
         if not QSystemTrayIcon.isSystemTrayAvailable():
             return
-        self.tray = QSystemTrayIcon(icon("plane", ACCENT, 32), self)
+        self.tray = QSystemTrayIcon(ui.logo(), self)
         self.tray.setToolTip("DCS Copilote")
         menu = QMenu()
         self._tray_toggle = menu.addAction("Masquer l'overlay", self.toggle_visible)
@@ -351,13 +400,15 @@ class Overlay(QWidget):
         if at_end:
             bar.setValue(bar.maximum())
 
-    def _fit(self):
-        """La zone de réponse grandit avec le texte jusqu'à « lines » lignes, puis défile."""
+    def _fit(self, full=False):
+        """La zone de réponse grandit avec le texte jusqu'à « lines » lignes, puis défile.
+        full : hauteur maximale (pendant le redimensionnement)."""
         doc = self.text.document()
         doc.setTextWidth(self.text.viewport().width() or (int(self.cfg["width"]) - 24))
         line = self.text.fontMetrics().lineSpacing()
-        h = int(doc.size().height()) + 4
-        self.text.setFixedHeight(max(line + 4, min(h, line * int(self.cfg["lines"]) + 4)))
+        top = line * int(self.cfg["lines"]) + 4
+        h = top if full else int(doc.size().height()) + 4
+        self.text.setFixedHeight(max(line + 4, min(h, top)))
         self.adjustSize()
 
     def _notice(self, text, color):
@@ -377,7 +428,7 @@ class Overlay(QWidget):
             w.setFont(f)
         self.text.document().setDefaultFont(f)
         self.text.setStyleSheet(f"QTextBrowser {{ background: transparent; border: none; color: {fg}; "
-                                "selection-background-color: rgba(52,211,153,0.35); selection-color: #e8edf3; }")
+                                "selection-background-color: rgba(61,139,255,0.35); selection-color: #e8edf3; }")
         self.question.setStyleSheet(f"color: {accent}; font-weight: 600;")
         self.notice.setStyleSheet(f"color: {MUTED};")
         self.send.setIcon(icon("send", accent, 16))
@@ -389,6 +440,7 @@ class Overlay(QWidget):
         if not cfg.get("show_actions", True):
             self.actions.hide()
         self.setProperty("locked", bool(cfg.get("locked")))
+        self.grip.setVisible(not cfg.get("click_through"))
         self.setWindowOpacity(max(0.2, min(1.0, float(cfg.get("opacity", 1.0)))))
         through = bool(cfg.get("click_through"))
         if through != bool(self.windowFlags() & Qt.WindowTransparentForInput):

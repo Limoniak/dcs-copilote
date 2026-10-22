@@ -291,7 +291,7 @@ def _result():
 
 def _show(lbl, text, kind="muted"):
     lbl.setText(text)
-    lbl.setStyleSheet(f"color: {dict(muted=MUTED, ok=ACCENT, err=ERROR)[kind]};")
+    lbl.setStyleSheet(f"color: {dict(muted=MUTED, ok=ui.READY, err=ERROR)[kind]};")
     lbl.setVisible(bool(text))
 
 
@@ -322,7 +322,7 @@ class SettingsWindow(QWidget):
         sl.setSpacing(4)
         brand = QHBoxLayout()
         logo = QLabel()
-        logo.setPixmap(icon("plane", ACCENT, 22).pixmap(22, 22))
+        logo.setPixmap(ui.logo("marque").pixmap(26, 26))
         brand.addWidget(logo)
         titles = QVBoxLayout()
         titles.setSpacing(0)
@@ -1341,8 +1341,9 @@ class SettingsWindow(QWidget):
         self.c_accent = look.add("Couleur d'accent", ColorButton(o.get("accent", ACCENT)),
                                  "Question posée, étape de checklist en cours.", stretch=False)
         self.s_width = look.add("Largeur", _spin(280, 1600, o["width"], 20, " px"), stretch=False)
-        self.s_lines = look.add("Hauteur maximale", _spin(3, 50, o["lines"], suffix=" lignes"),
-                                "Au-delà, la réponse défile.", stretch=False)
+        self.s_lines = look.add("Hauteur maximale", _spin(1, 50, o["lines"], suffix=" lignes"),
+                                "Au-delà, la réponse défile. Aussi : glisser le coin bas-droit de l'overlay.",
+                                stretch=False)
         lay.addWidget(look)
 
         text = Card("Texte")

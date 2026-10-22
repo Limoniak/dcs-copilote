@@ -39,7 +39,7 @@ class Wizard(QWidget):
         tl = QHBoxLayout(top)
         tl.setContentsMargins(0, 0, 0, 0)
         logo = _label("")
-        logo.setPixmap(icon("plane", ACCENT, 22).pixmap(22, 22))
+        logo.setPixmap(ui.logo("marque").pixmap(26, 26))
         tl.addWidget(logo)
         self.step = _label("", muted=True)
         tl.addWidget(self.step, 1)

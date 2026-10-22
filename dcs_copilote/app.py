@@ -58,6 +58,7 @@ class App:
         self.speaker = Speaker(make_tts(cfg["tts"], self.log, cfg["llm"]), cfg["audio"]["output_device"],
                                lambda: self.gen, self.log)
         self.speaker.on_start = self._on_voice_start
+        self.overlay.on_resized = self._overlay_resized
         self.speaker.radio = int(cfg["tts"].get("radio", 0))
         self.speaker.start()
         self.lat = {}                          # mesures de latence de la question en cours
@@ -200,6 +201,12 @@ class App:
         """Premier lancement : 3 étapes (IA, bouton PTT, script DCS) au lieu de tous les réglages."""
         from .wizard import Wizard
         self.settings_win = Wizard(self)
+
+    def _overlay_resized(self, values):
+        """Taille changée avec la poignée de l'overlay : retenue pour les prochains lancements."""
+        for k, v in values.items():
+            self.cfg["overlay"][k] = v
+            self._save_setting(("overlay", k), v)
 
     def apply_settings(self, new):
         """Enregistre la nouvelle config et l'applique sans redémarrer."""

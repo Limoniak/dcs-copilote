@@ -96,13 +96,13 @@ DEFAULTS = {
         "x": 40,
         "y": 40,
         "width": 560,
-        "lines": 12,
+        "lines": 12,               # hauteur maximale de la réponse (aussi réglable avec le coin bas-droit)
         "alpha": 0.88,             # opacité du fond seul
         "opacity": 1.0,            # opacité de tout l'overlay (texte compris)
         "font_size": 11,
         "font_family": "",         # vide = police de l'interface
         "bold": False,
-        "accent": "#34d399",       # couleur de la question, de l'étape de checklist, du bouton envoyer
+        "accent": "#3d8bff",       # couleur de la question, de l'étape de checklist, du bouton envoyer
         "text_color": "#e8edf3",   # couleur des réponses
         "bg_color": "#0e1116",
         "show_header": True,       # appareil + boutons (masqué : réglages par clic droit ou zone de notification)
@@ -127,6 +127,9 @@ def _merge(base, override):
     return out
 
 
+OLD_ACCENT = "#34d399"
+
+
 def _migrate(data):
     """Ancien format (base_url/api_key/model directement dans "llm") -> fournisseur "custom"."""
     llm = data.get("llm") or {}
@@ -134,6 +137,9 @@ def _migrate(data):
         old = {k: llm.pop(k) for k in ("base_url", "api_key", "model") if k in llm}
         llm.setdefault("providers", {})["custom"] = old
         llm.setdefault("provider", "custom")
+    ov = data.get("overlay") or {}
+    if ov.get("accent") == OLD_ACCENT:      # ancien vert par défaut -> bleu du logo (un vert choisi exprès reste)
+        ov["accent"] = DEFAULTS["overlay"]["accent"]
     return data
 
 

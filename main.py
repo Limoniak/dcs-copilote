@@ -112,6 +112,7 @@ def cmd_selftest():
         from dcs_copilote import ui_kit
         ui_kit.application()
         ui_kit.icon("plane")
+        assert not ui_kit.logo().isNull(), "logo absent"
         return "PySide6"
 
     def whisper():

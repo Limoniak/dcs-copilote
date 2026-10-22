@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo/horizontal.svg" alt="DCS Copilote" width="720"></p>
+
 # DCS Copilote
 
 Ton copilote vocal pour DCS World (Windows / Linux) : il te parle comme un équipier dans le cockpit. Tu maintiens un bouton (clavier ou HOTAS), tu poses ta question à voix haute, la réponse s'affiche dans un overlay et est lue au casque. L'appareil piloté est détecté automatiquement via `Export.lua`.
@@ -35,7 +37,7 @@ sudo apt install python3-venv libportaudio2 libxcb-cursor0 espeak-ng
 
 ## Interface
 
-Overlay semi-transparent toujours au premier plan (Qt / PySide6) : appareil, réponse affichée au fil de l'eau (mise en forme Markdown), champ de question, pastille d'état (vert prêt · rouge écoute · ambre réflexion). Fais-le glisser par son en-tête ; sa position est mémorisée.
+Overlay semi-transparent toujours au premier plan (Qt / PySide6) : appareil, réponse affichée au fil de l'eau (mise en forme Markdown), champ de question, pastille d'état (vert prêt · rouge écoute · ambre réflexion). Fais-le glisser par son en-tête ; sa position est mémorisée. Le coin bas-droit le redimensionne (largeur et hauteur de la réponse) ; la taille est mémorisée.
 
 - **Micro** à droite du champ : maintiens-le pour parler (pratique pour tester sans bouton PTT).
 - **Répéter** relit la dernière réponse ; **Détailler** demande la version complète.

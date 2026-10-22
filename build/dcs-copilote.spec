@@ -6,7 +6,8 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 ROOT = os.path.dirname(SPECPATH)
 
-datas = [(os.path.join(ROOT, "dcs", "DCSAssistant.lua"), "dcs")]
+datas = [(os.path.join(ROOT, "dcs", "DCSAssistant.lua"), "dcs"),
+         (os.path.join(ROOT, "assets", "logo"), os.path.join("assets", "logo"))]
 binaries = []
 hiddenimports = collect_submodules("pynput") + collect_submodules("pyttsx3.drivers")
 # bibliothèques avec des fichiers non Python (modèles, DLL, données espeak…)

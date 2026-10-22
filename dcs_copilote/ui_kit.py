@@ -22,13 +22,14 @@ RAISED = "#1c232c"
 BORDER = "#29313c"
 TEXT = "#e8edf3"
 MUTED = "#8b95a4"
-ACCENT = "#34d399"
-ACCENT_HOVER = "#5ee0b0"
+ACCENT = "#3d8bff"           # bleu électrique du logo
+ACCENT_HOVER = "#6aa6ff"
+READY = "#34d399"            # voyant « prêt » et messages de réussite : restent verts
 LISTEN = "#fb7185"
 BUSY = "#fbbf24"
 ERROR = "#f87171"
 
-STATE_COLORS = {"idle": MUTED, "ready": ACCENT, "listen": LISTEN, "busy": BUSY, "error": ERROR}
+STATE_COLORS = {"idle": MUTED, "ready": READY, "listen": LISTEN, "busy": BUSY, "error": ERROR}
 
 FONT_CANDIDATES = ["Inter", "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", "Cantarell",
                    "Noto Sans", "Ubuntu", "DejaVu Sans"]
@@ -54,6 +55,7 @@ def application():
         pal.setColor(QPalette.Link, QColor(ACCENT))
         app.setPalette(pal)
         app.setStyleSheet(STYLESHEET + _arrow_rule())
+        app.setWindowIcon(logo())
         app._wheel_guard = _WheelGuard(app)
         app.installEventFilter(app._wheel_guard)
     return app
@@ -136,6 +138,23 @@ def icon(name, color=MUTED, size=18, stroke=2.0):
     return QIcon(pm)
 
 
+LOGO_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "logo")
+
+
+def logo(name="icone", sizes=(16, 24, 32, 48, 64, 128, 256)):
+    """Logo de l'appli (assets/logo/<name>.svg) en icône multi-tailles."""
+    renderer = QSvgRenderer(os.path.join(LOGO_DIR, name + ".svg"))
+    ic = QIcon()
+    for s in sizes:
+        pm = QPixmap(s, s)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        renderer.render(p)
+        p.end()
+        ic.addPixmap(pm)
+    return ic
+
+
 def paint_card(widget, margin, radius=16, alpha=1.0, color=BASE):
     """Fond de fenêtre sans bordure : carte arrondie + ombre douce dans la marge transparente."""
     if alpha <= 0:          # fond invisible : texte seul, sans ombre ni bordure
@@ -199,12 +218,12 @@ QPushButton#nav {{
     background: transparent; border: none; border-radius: 9px; padding: 9px 12px; text-align: left; color: {MUTED};
 }}
 QPushButton#nav:hover {{ background: rgba(255,255,255,0.05); color: {TEXT}; }}
-QPushButton#nav:checked {{ background: rgba(52,211,153,0.12); color: {ACCENT}; }}
+QPushButton#nav:checked {{ background: rgba(61,139,255,0.14); color: {ACCENT}; }}
 QPushButton#tile {{
     background: {RAISED}; border: 1px solid {BORDER}; border-radius: 10px; padding: 10px 12px; text-align: left;
 }}
 QPushButton#tile:hover {{ border-color: #3a4452; }}
-QPushButton#tile:checked {{ border: 1px solid {ACCENT}; background: rgba(52,211,153,0.10); color: {ACCENT}; }}
+QPushButton#tile:checked {{ border: 1px solid {ACCENT}; background: rgba(61,139,255,0.12); color: {ACCENT}; }}
 QFrame#seg {{ background: {RAISED}; border: 1px solid {BORDER}; border-radius: 9px; }}
 QPushButton#segbtn {{ background: transparent; border: none; border-radius: 7px; padding: 6px 14px; color: {MUTED}; }}
 QPushButton#segbtn:hover {{ color: {TEXT}; }}
