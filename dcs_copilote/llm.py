@@ -77,6 +77,50 @@ def _save_accepted():
 
 _accepted = _load_accepted()
 
+# Suivi de consommation : requêtes du jour par modèle (data/usage.json) et quota restant annoncé par le
+# fournisseur dans ses en-têtes (Groq : x-ratelimit-*-requests, quota du jour) : (fournisseur, modèle) → (reste, limite)
+USAGE_PATH = os.path.join("data", "usage.json")
+QUOTA = {}
+
+
+def _count_request(prov, model, headers):
+    try:
+        rem, lim = headers.get("x-ratelimit-remaining-requests"), headers.get("x-ratelimit-limit-requests")
+        if rem and lim:
+            QUOTA[(prov, model)] = (int(rem), int(lim))
+    except ValueError:
+        pass
+    today = time.strftime("%Y-%m-%d")
+    data = usage_today()
+    key = f"{prov}|{model}"
+    data[key] = data.get(key, 0) + 1
+    try:
+        os.makedirs(os.path.dirname(USAGE_PATH), exist_ok=True)
+        with open(USAGE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"date": today, "requests": data}, f, indent=1)
+    except OSError:
+        pass
+
+
+def usage_today():
+    """{"fournisseur|modèle": requêtes} du jour."""
+    try:
+        with open(USAGE_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return dict(data["requests"]) if data.get("date") == time.strftime("%Y-%m-%d") else {}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def usage_summary(prov):
+    """Ligne pour les réglages : requêtes du jour chez ce fournisseur, et quota restant s'il est connu."""
+    used = {k.split("|", 1)[1]: n for k, n in usage_today().items() if k.split("|", 1)[0] == prov}
+    if not used and not any(p == prov for p, _m in QUOTA):
+        return ""
+    parts = [f"Aujourd'hui : {sum(used.values())} requête{'s' * (sum(used.values()) > 1)}"]
+    parts += [f"{m} : {rem} sur {lim} restantes" for (p, m), (rem, lim) in QUOTA.items() if p == prov]
+    return " · ".join(parts)
+
 
 def _api_message(text):
     """Extrait le message d'erreur d'une réponse JSON (OpenAI : {"error":…}, Gemini : [{"error":…}])."""
@@ -159,6 +203,7 @@ class LLMClient:
         self.base = self.cfg["base_url"].rstrip("/")
         self.url = self.base + "/chat/completions"
         self.name = NAMES.get(self.cfg["provider"], self.cfg["provider"])
+        self.last_model = self.cfg["model"]        # modèle qui a vraiment répondu (secours compris)
 
     def _error(self, status, text, model):
         detail = _api_message(text)
@@ -231,6 +276,8 @@ class LLMClient:
                     return
                 r = self._request(model, messages, headers, fast)
                 if r.status_code == 200:
+                    _count_request(prov, model, r.headers)
+                    self.last_model = model
                     yield from self._read(r)
                     return
                 status, text = r.status_code, r.text

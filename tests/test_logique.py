@@ -50,6 +50,30 @@ def test_limite_par_minute_bascule_tout_de_suite_sur_le_secours(monkeypatch):
     assert calls == ["petit"]                         # le gros modèle attend la fin de la fenêtre
 
 
+def test_suivi_de_consommation_et_alerte_de_quota(tmp_path, monkeypatch):
+    from dcs_copilote import app
+    monkeypatch.setattr(llm, "USAGE_PATH", str(tmp_path / "usage.json"))
+    monkeypatch.setattr(llm, "QUOTA", {})
+    remaining = iter([60, 49, 48, 9])
+
+    def fake_request(self, model, messages, headers, fast=False):
+        h = {"x-ratelimit-remaining-requests": str(next(remaining)), "x-ratelimit-limit-requests": "1000"}
+        return types.SimpleNamespace(status_code=200, text="", headers=h, close=lambda: None)
+
+    monkeypatch.setattr(llm.LLMClient, "_request", fake_request)
+    monkeypatch.setattr(llm.LLMClient, "_read", lambda self, r: iter(["ok"]))
+    client = llm.LLMClient({"provider": "groq", "providers": {"groq": {"base_url": "http://x", "api_key": "k",
+                                                                       "model": "gpt-oss-120b"}}})
+    said = []
+    fake = types.SimpleNamespace(llm=client, quota_warned=set(), overlay=types.SimpleNamespace(info=said.append))
+    for _ in range(4):
+        "".join(client.stream([]))
+        app.App._quota_warning(fake)
+    assert llm.usage_today() == {"groq|gpt-oss-120b": 4}
+    assert llm.usage_summary("groq") == "Aujourd'hui : 4 requêtes · gpt-oss-120b : 9 sur 1000 restantes"
+    assert len(said) == 2 and "49 requêtes" in said[0] and "9 requêtes" in said[1]     # une fois à 50, une fois à 10
+
+
 def test_indicatif_place_par_l_appli():
     on = system_prompt("F/A-18C Hornet", None, "vol", callsign="Viper 1", address=True)
     off = system_prompt("F/A-18C Hornet", None, "vol", callsign="Viper 1", address=False)

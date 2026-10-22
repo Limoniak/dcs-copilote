@@ -553,6 +553,7 @@ class SettingsWindow(QWidget):
         trow.addStretch(1)
         conn.lay.addLayout(trow)
         self.llm_result = conn.add_widget(_result())
+        self.usage_lbl = conn.add_widget(_label("", muted=True, wrap=True))
         lay.addWidget(conn)
 
         adv = Card("Comportement")
@@ -601,6 +602,9 @@ class SettingsWindow(QWidget):
             hint += f" — ou variable d'environnement {p['api_key_env']}"
         self.key_hint.setText(_links(hint))
         _show(self.llm_result, "")
+        from .llm import usage_summary
+        self.usage_lbl.setText(usage_summary(name))
+        self.usage_lbl.setVisible(bool(self.usage_lbl.text()))
         self._model_hint()
         if p.get("api_key") or not p.get("api_key_env"):
             self._list_models(manual=False)      # liste prête dès le choix du fournisseur

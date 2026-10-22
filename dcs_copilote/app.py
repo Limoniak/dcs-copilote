@@ -34,6 +34,7 @@ class App:
         self.gen_lock = threading.Lock()
         self.history = deque(maxlen=2 * int(cfg["llm"]["max_history"]))
         self.turns = 0                         # réponses données (pour doser l'emploi de l'indicatif)
+        self.quota_warned = set()              # seuils de quota déjà annoncés (50, 10 requêtes)
         self.manual_aircraft = None
         self.dcs_aircraft = None
         self.stt = None
@@ -862,7 +863,7 @@ class App:
             for s in splitter.flush():
                 self.speaker.say(s, gen)
         answer = "".join(full).strip()
-        model = self.llm.cfg["model"] if self.llm else "?"
+        model = self.llm.last_model if self.llm else "?"
         print(f"[réponse · {model}]{' (' + sources + ')' if sources else ' (sans manuel)'}\n{answer}", flush=True)
         if answer:
             self.history.append({"role": "user", "content": question})
@@ -872,7 +873,18 @@ class App:
             if sources:
                 self.overlay.info(sources)
             self._note(question, answer, sources)
+            self._quota_warning()
         self._ready()
+
+    def _quota_warning(self):
+        """Quota du jour presque épuisé (annoncé par le fournisseur) : prévenir une fois à 50, puis à 10."""
+        from .llm import QUOTA
+        q = QUOTA.get((self.llm.cfg["provider"], self.llm.last_model)) if self.llm else None
+        level = next((n for n in (10, 50) if q and q[0] <= n), None)
+        if level and level not in self.quota_warned:
+            self.quota_warned |= {n for n in (10, 50) if n >= level}
+            self.overlay.info(f"Quota du jour presque épuisé sur {self.llm.last_model} : {q[0]} requêtes "
+                              "restantes. Ensuite, le modèle de secours prendra le relais.")
 
     def _note(self, question, answer, sources):
         """Historique à relire après le vol : un fichier Markdown par jour dans data/historique/."""
