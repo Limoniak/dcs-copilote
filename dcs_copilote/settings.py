@@ -632,7 +632,11 @@ class SettingsWindow(QWidget):
         card = Card("Chuck's Guides", "Guides détaillés et très illustrés de chucksguides.com, téléchargés et "
                                       "mis à jour automatiquement (vérification hebdomadaire, seulement si un "
                                       "guide a changé). Comptent ~50 à 150 Mo chacun.")
-        self.t_chucks = card.add("Mise à jour automatique", Toggle(ch.get("enabled", False)), stretch=False)
+        self.t_auto = card.add("Guide de l'appareil piloté", Toggle(ch.get("auto_current", True)),
+                               "Téléchargé et lu automatiquement dès que tu voles sur un appareil sans manuel.",
+                               stretch=False)
+        self.t_chucks = card.add("Mise à jour hebdomadaire", Toggle(ch.get("enabled", True)),
+                                 "Retélécharge un guide seulement s'il a changé.", stretch=False)
         self.t_follow = card.add("Suivre mes modules", Toggle(ch.get("follow_installed", True)),
                                  "Ajoute d'office les guides des modules installés (dossier de DCS ci-dessus).",
                                  stretch=False)
@@ -1265,7 +1269,8 @@ class SettingsWindow(QWidget):
                        "rules": {rid: t.isChecked() for rid, t in self.t_rules.items()}}
         c["manuals"].update(enabled=self.t_manuals.isChecked(), dcs_dir=self.cb_dcsdir.get().strip(),
                             extra_dir=self.e_extra.get().strip())
-        c["manuals"]["chucks"] = {"enabled": self.t_chucks.isChecked(), "follow_installed": self.t_follow.isChecked(),
+        c["manuals"]["chucks"] = {"enabled": self.t_chucks.isChecked(), "auto_current": self.t_auto.isChecked(),
+                                  "follow_installed": self.t_follow.isChecked(),
                                   "aircraft": self._chucks_checked()}
         c["dcs"].update(udp_port=self.s_port.value(), saved_games=self.cb_saved.currentText().strip())
         c["overlay"].update(self._overlay_values())

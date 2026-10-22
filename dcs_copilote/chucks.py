@@ -95,6 +95,28 @@ def _cleanup_parts():
                 pass
 
 
+def slug_for(aircraft, guides):
+    """Guide de Chuck correspondant à l'appareil piloté (nom lisible ou nom interne DCS), ou None."""
+    from .aircraft import AIRCRAFT
+    if not aircraft:
+        return None
+    keys = {_norm(aircraft), _norm(aircraft.split()[0])}
+    keys |= {_norm(k) for k, v in AIRCRAFT.items() if v == aircraft or k == aircraft}
+    keys |= {_norm(k.split("_")[0]) for k, v in AIRCRAFT.items() if v == aircraft or k == aircraft}
+    keys = {k for k in keys if len(k) >= 3}
+    best, best_len = None, 0
+    for slug, name in guides.items():
+        if _norm(name) in keys:
+            return slug                         # même nom que sur le site
+        for s in [_norm(slug)] + ALIASES.get(slug, []):
+            for k in keys:
+                if k.startswith(s) or s.startswith(k):
+                    n = min(len(s), len(k))
+                    if n > best_len:
+                        best, best_len = slug, n
+    return best
+
+
 def due(state):
     return time.time() - state.get("last_check", 0) > CHECK_EVERY
 

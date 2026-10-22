@@ -74,7 +74,8 @@ DEFAULTS = {
         "extra_dir": "",           # dossier de PDF perso (Chuck's Guides…)
         "top_k": 4,
         "chucks": {
-            "enabled": False,      # télécharger et mettre à jour les Chuck's Guides (chaque semaine)
+            "auto_current": True,  # récupérer d'office le guide de l'appareil piloté s'il n'a aucun manuel
+            "enabled": True,       # vérifier chaque semaine les guides téléchargés (mise à jour)
             "follow_installed": True,   # + les guides des modules installés dans DCS
             "aircraft": [],        # guides choisis à la main (identifiants du site : fa-18c, f-16cm…)
         },

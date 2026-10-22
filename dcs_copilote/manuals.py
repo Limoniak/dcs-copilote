@@ -191,6 +191,18 @@ def build_index(pdfs, progress=lambda done, total, msg: None, should_stop=lambda
     return out
 
 
+def index_is_current(pdfs):
+    """Vrai si chaque PDF est déjà indexé dans sa version actuelle (rien à refaire)."""
+    data, _emb = _load_raw()
+    if not data or data.get("model") != EMBED_MODEL:
+        return not pdfs
+    known = {d.get("key") for d in data["docs"]}
+    try:
+        return all(_doc_key(p) in known for p, _m in pdfs)
+    except OSError:
+        return False
+
+
 def summary_of(docs, n_chunks):
     per = Counter(d["module"] for d in docs if d["chunks"])
     return {"docs": sum(1 for d in docs if d["chunks"]), "chunks": n_chunks, "modules": dict(per)}
@@ -234,6 +246,13 @@ class Manuals:
         return summary_of(self.docs, len(self.chunks)) if self.ready else None
 
     # -------- correspondance appareil ↔ manuels
+    def covers(self, aircraft):
+        """Vrai si au moins un manuel indexé concerne cet appareil."""
+        if not self.ready:
+            return False
+        with self._lock:
+            return bool(self._docs_for(aircraft))
+
     def _docs_for(self, aircraft):
         """Indices des documents du module piloté (None = tous)."""
         if not aircraft:

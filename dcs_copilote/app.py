@@ -71,8 +71,9 @@ class App:
 
         from .manuals import Manuals
         self.manuals = Manuals(self.log)
-        threading.Thread(target=self.load_manuals, daemon=True).start()
         self._chucks_lock = threading.Lock()
+        self._fetching = set()
+        threading.Thread(target=self._startup_manuals, daemon=True).start()
         threading.Thread(target=self._chucks_loop, daemon=True).start()
         threading.Thread(target=self._load_stt, daemon=True).start()
         threading.Thread(target=self._worker, daemon=True).start()
@@ -280,6 +281,87 @@ class App:
         except Exception as e:  # noqa: BLE001
             self.log(f"Manuels indisponibles : {e}", error=True)
 
+    def _startup_manuals(self):
+        """Au démarrage : charge l'index, repère DCS, indexe les manuels officiels nouveaux ou mis à jour,
+        puis récupère le guide de l'appareil courant s'il manque."""
+        from .manuals import build_index, dcs_install_candidates, find_pdfs, index_is_current
+        self.load_manuals()
+        m = self.cfg["manuals"]
+        if not m.get("enabled", True):
+            return
+        if not m.get("dcs_dir"):
+            found = dcs_install_candidates()
+            if found:
+                m["dcs_dir"] = found[0]
+                self._save_setting(("manuals", "dcs_dir"), found[0])
+                print(f"[manuels] DCS trouvé : {found[0]}", flush=True)
+        pdfs = find_pdfs(m.get("dcs_dir"), m.get("extra_dir"))
+        if pdfs and not index_is_current(pdfs):
+            with self._chucks_lock:
+                while self.dcs.snapshot() is not None:      # pas d'analyse lourde en plein vol
+                    time.sleep(30)
+                self.overlay.info("Je lis les manuels de tes modules (première fois : quelques minutes)…")
+                try:
+                    s = build_index(pdfs, threads=2)
+                    self.load_manuals()
+                    self.overlay.info(f"Manuels prêts : {s['docs']} documents.")
+                except Exception as e:  # noqa: BLE001
+                    print(f"[manuels] indexation impossible : {e}", flush=True)
+        self.ensure_manual(self.current_aircraft())
+
+    def _save_setting(self, path, value):
+        """Enregistre une seule valeur dans config.json (sans écraser le reste)."""
+        try:
+            disk = cfgmod.load(self.cfg_path)
+            node = disk
+            for k in path[:-1]:
+                node = node.setdefault(k, {})
+            node[path[-1]] = value
+            cfgmod.save(self.cfg_path, disk)
+        except (OSError, ValueError) as e:
+            print(f"[réglages] {e}", flush=True)
+
+    def ensure_manual(self, aircraft):
+        """Appareil sans manuel indexé : télécharge son Chuck's Guide et l'indexe, en arrière-plan."""
+        m = self.cfg["manuals"]
+        if not aircraft or not m.get("enabled", True) or not m.get("chucks", {}).get("auto_current", True):
+            return
+        if self.manuals.covers(aircraft) or aircraft in self._fetching:
+            return
+        self._fetching.add(aircraft)
+        threading.Thread(target=self._fetch_manual, args=(aircraft,), daemon=True).start()
+
+    def _fetch_manual(self, aircraft):
+        from . import chucks
+        from .manuals import build_index, find_pdfs
+        try:
+            state = chucks.load_state()
+            guides = state["guides"] or chucks.list_guides()
+            slug = chucks.slug_for(aircraft, guides)
+            if not slug:
+                print(f"[manuels] pas de Chuck's Guide pour {aircraft}", flush=True)
+                return
+            name = guides.get(slug, slug)
+            ch = self.cfg["manuals"].setdefault("chucks", {})
+            if slug not in ch.setdefault("aircraft", []):
+                ch["aircraft"].append(slug)
+                self._save_setting(("manuals", "chucks", "aircraft"), list(ch["aircraft"]))
+            with self._chucks_lock:
+                self.overlay.info(f"Je récupère le guide de Chuck pour le {name}…")
+                updated, errors = chucks.update(self.chucks_selection())
+                if errors and not any(name in u for u in updated):
+                    raise RuntimeError("; ".join(errors))
+                self.overlay.info(f"Je lis le guide du {name}…")
+                m = self.cfg["manuals"]
+                build_index(find_pdfs(m.get("dcs_dir"), m.get("extra_dir")), threads=1)
+                self.load_manuals()
+            self.overlay.info(f"Guide du {name} prêt : mes réponses s'appuient dessus.")
+        except Exception as e:  # noqa: BLE001
+            print(f"[manuels] récupération du guide pour {aircraft} impossible : {e}", flush=True)
+            self.overlay.info(f"Guide pour {aircraft} indisponible pour l'instant (pas d'Internet ?).")
+        finally:
+            self._fetching.discard(aircraft)
+
     # ------------------------------------------------------------------ Chuck's Guides
     def chucks_selection(self, cfg=None):
         from . import chucks
@@ -406,6 +488,7 @@ class App:
             self.history.clear()
             self.overlay.set_aircraft(ac.pretty(name), locked=True)
             self.log(f"DCS : {ac.pretty(name)}")
+            self.ensure_manual(ac.pretty(name))
         else:
             self.overlay.set_aircraft(self.manual_aircraft, locked=False)
             self.log("DCS déconnecté")
@@ -416,6 +499,7 @@ class App:
             self.manual_aircraft = name
             self.history.clear()
             self.overlay.info(f"Appareil : {name}")
+            self.ensure_manual(name)
 
     def reset(self):
         self.checklist = None
