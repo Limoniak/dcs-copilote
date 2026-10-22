@@ -8,9 +8,10 @@ TIMEOUT = 8  # s sans paquet => plus en vol / DCS fermé
 
 
 class DCSLink(threading.Thread):
-    def __init__(self, port, on_change, log):
+    def __init__(self, port, on_change, log, on_packet=None):
         super().__init__(daemon=True)
         self.port, self.on_change, self.log = port, on_change, log
+        self.on_packet = on_packet             # appelé à chaque paquet (alertes de vol)
         self.state = None
         self._lock = threading.Lock()
         self.running = True
@@ -41,6 +42,11 @@ class DCSLink(threading.Thread):
                     self.state = msg
                 if not prev or prev.get("aircraft") != msg.get("aircraft"):
                     self.on_change(msg)
+                if self.on_packet:
+                    try:
+                        self.on_packet(msg)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[alertes] {e}", flush=True)
             except socket.timeout:
                 pass
             except (ValueError, UnicodeDecodeError):

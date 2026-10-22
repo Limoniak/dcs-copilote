@@ -33,6 +33,12 @@ Overlay semi-transparent toujours au premier plan (Qt / PySide6) : appareil, ré
 - Icône dans la **zone de notification** (si le bureau en a une) : afficher / masquer l'overlay, réglages, quitter.
 - Une seule instance à la fois ; journal dans `logs/dcs-copilote.log` (bouton « Ouvrir le journal » des réglages).
 
+## Checklists, alertes, latence
+
+- **Checklist** : « Lance la procédure de démarrage » ou « checklist décollage » (à la voix ou tapé). Les étapes sont tirées des manuels indexés et annoncées une par une ; **appui bref sur le PTT** ou « suivant » = étape suivante, « répète », « précédent », « stop ». Boutons équivalents dans l'overlay.
+- **Alertes vocales** (Réglages → Alertes) : train rentré en approche, taux de chute élevé près du sol, train ou volets sortis à grande vitesse, carburant bas, facteur de charge élevé. Une alerte passe devant la réponse en cours. Il faut le script DCS v2.
+- **Latence** : chaque question laisse une ligne `[latence]` dans le journal (transcription, 1er mot de l'IA, début de la voix). Pour aller plus vite : « Réponse rapide en vol » (Réglages → IA, limite la réflexion de Gemini 2.5 / GPT-5…) et reconnaissance vocale **en ligne** (Réglages → Voix : Groq gratuit ~0,3 s, ou OpenAI), avec repli automatique sur Whisper local.
+
 ## Manuels : des réponses fiables
 
 Sans manuel, l'IA répond de mémoire et peut inventer des noms d'interrupteurs. Dans **⚙ Réglages → Manuels**, indexe les PDF officiels de tes modules (`DCS World/Mods/aircraft/*/Doc/`) et, si tu veux, un dossier perso (Chuck's Guides…). À chaque question, les passages les plus utiles **du manuel de l'appareil piloté** sont donnés à l'IA, et les sources (document, page) s'affichent sous la réponse.

@@ -61,6 +61,8 @@ dcs-copilote/
     ├── dcs_install.py      Détection de Saved Games/DCS, installation du script + ligne Export.lua
     ├── prompts.py          Prompt système : base + mode vol (longueur réglable, phrases ≤ 15 mots) / sol + consignes perso
     ├── manuals.py          Manuels PDF : indexation (PyMuPDF + embeddings multilingues fastembed) et recherche hybride
+    ├── checklist.py        Mode checklist : détection, commandes (suivant/précédent/répète/stop), étapes
+    ├── alerts.py           Alertes de vol : règles, maintien, délai entre deux annonces, hélicoptères
     ├── chucks.py           Chuck's Guides : liste du site, ETag, téléchargement des guides nouveaux/modifiés
     ├── logfile.py          Journal logs/dcs-copilote.log (horodaté) + capture des exceptions
     ├── textutil.py         Découpage en phrases + nettoyage pour la voix (kt → nœuds…)
@@ -73,7 +75,7 @@ dcs-copilote/
 |---|---|
 | principal | Boucle Qt — l'interface n'est modifiée que via `overlay._call()` (signal Qt mis en file) |
 | worker | Transcription + appel LLM, une requête à la fois |
-| Speaker | Synthèse des phrases en file (la suivante pendant que la courante est jouée) |
+| Speaker | Synthèse des phrases en file prioritaire (alertes devant) (la suivante pendant que la courante est jouée) |
 | Speaker._player | Lecture audio des phrases synthétisées |
 | DCSLink | Réception UDP |
 | PTT | Listener pynput ou boucle d'événements pygame |
@@ -130,7 +132,8 @@ python main.py --download-voice fr_FR-siwis-medium
 
 ## Pistes d'évolution
 
+Voir [ROADMAP.md](ROADMAP.md) pour la liste complète et à jour.
+
 - Manuels officiels : réindexer automatiquement après une mise à jour de DCS (les Chuck's Guides le sont déjà).
 - Armement sélectionné dans les données Lua (dépend du module).
-- Mode checklist : l'assistant déroule une procédure étape par étape, « suivant » au PTT.
 - Packaging : exécutable Windows avec PyInstaller.

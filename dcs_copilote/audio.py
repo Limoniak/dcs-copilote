@@ -1,4 +1,5 @@
 """Micro (push-to-talk), bips, synthèse vocale et lecture interruptible."""
+import itertools
 import os
 import queue
 import re
@@ -439,15 +440,24 @@ class Speaker(threading.Thread):
         self.device = _dev(output_device)
         self.current_gen = current_gen
         self.log = log
-        self.q = queue.Queue()
-        self.audio_q = queue.Queue(maxsize=3)
+        # (priorité, ordre, …) : 0 = alerte (passe devant et coupe la phrase en cours), 1 = réponse
+        self.q = queue.PriorityQueue()
+        self.audio_q = queue.PriorityQueue()
+        self._seq = itertools.count()
         self.busy = threading.Event()
+        self.on_start = None                   # on_start(gen) : début de lecture d'une phrase (mesure de latence)
         threading.Thread(target=self._player, daemon=True).start()
 
     def say(self, text, gen):
         text = clean_for_speech(text)
         if self.tts and text:
-            self.q.put((text, gen))
+            self.q.put((1, next(self._seq), text, gen))
+
+    def alert(self, text):
+        """Annonce prioritaire, indépendante de la question en cours (alertes de vol)."""
+        text = clean_for_speech(text)
+        if self.tts and text:
+            self.q.put((0, next(self._seq), text, None))
 
     def stop(self):
         for q in (self.q, self.audio_q):
@@ -464,8 +474,8 @@ class Speaker(threading.Thread):
 
     def run(self):
         while True:
-            text, gen = self.q.get()
-            if gen != self.current_gen():
+            prio, seq, text, gen = self.q.get()
+            if gen is not None and gen != self.current_gen():
                 continue
             tts = self.tts
             if tts is None:
@@ -475,15 +485,19 @@ class Speaker(threading.Thread):
             except Exception as e:  # noqa: BLE001
                 self.log(f"Erreur TTS : {e}")
                 continue
-            if audio is not None and gen == self.current_gen():
-                self.audio_q.put((audio, sr, gen))
+            if audio is not None and (gen is None or gen == self.current_gen()):
+                self.audio_q.put((prio, seq, audio, sr, gen))
+                if prio == 0 and self.busy.is_set():
+                    sd.stop()                  # l'alerte coupe la phrase en cours
 
     def _player(self):
         while True:
-            audio, sr, gen = self.audio_q.get()
-            if gen != self.current_gen():
+            _prio, _seq, audio, sr, gen = self.audio_q.get()
+            if gen is not None and gen != self.current_gen():
                 continue
             self.busy.set()
+            if self.on_start:
+                self.on_start(gen)
             try:
                 play(audio, sr, self.device, wait=True)
             except Exception as e:  # noqa: BLE001

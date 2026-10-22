@@ -13,6 +13,9 @@ class LLMError(Exception):
 NAMES = {"ollama": "Ollama", "openai": "OpenAI", "gemini": "Gemini", "grok": "Grok", "openrouter": "OpenRouter"}
 RETRY_STATUS = {429, 500, 502, 503, 504}      # surcharge / limite passagère : on réessaie
 RETRY_DELAYS = (1.0, 2.5)                     # court : on est en vol
+# « réflexion » minimale des modèles qui raisonnent avant de répondre (Gemini 2.5, GPT-5, Grok mini…) :
+# 1 à 3 s de gagnées en vol. Un modèle qui refuse le paramètre est rappelé sans.
+FAST_EFFORT = {"gemini": "none", "openai": "minimal", "grok": "low"}
 
 
 def _api_message(text):
@@ -131,7 +134,7 @@ class LLMClient:
         # Gemini renvoie "models/gemini-…", accepté aussi sans le préfixe
         return sorted(m["id"].removeprefix("models/") for m in r.json().get("data", []))
 
-    def stream(self, messages, on_retry=None, alive=None):
+    def stream(self, messages, on_retry=None, alive=None, fast=False):
         """Génère les morceaux de texte de la réponse au fil de l'eau.
 
         Surcharge passagère (429/5xx) : nouvel essai, puis modèle de secours s'il est configuré.
@@ -151,7 +154,7 @@ class LLMClient:
             for attempt in range(len(RETRY_DELAYS) + 1):
                 if not alive():
                     return
-                r = self._request(model, messages, headers)
+                r = self._request(model, messages, headers, fast)
                 if r.status_code == 200:
                     yield from self._read(r)
                     return
@@ -175,20 +178,25 @@ class LLMClient:
             err += "\nAstuce : ajoute un modèle de secours dans ⚙ Réglages → IA."
         raise LLMError(err)
 
-    def _request(self, model, messages, headers):
+    def _request(self, model, messages, headers, fast=False):
         payload = {
             "model": model,
             "messages": messages,
             "temperature": self.cfg.get("temperature", 0.3),
             "stream": True,
-            **(self.cfg.get("extra") or {}),
         }
+        effort = FAST_EFFORT.get(self.cfg["provider"]) if fast else None
+        if effort:
+            payload["reasoning_effort"] = effort
+        payload.update(self.cfg.get("extra") or {})
         r = self._post(payload, headers)
-        # les modèles de raisonnement OpenAI (o*, gpt-5…) refusent une température personnalisée
-        if r.status_code == 400 and "temperature" in r.text:
-            r.close()
-            payload.pop("temperature")
-            r = self._post(payload, headers)
+        # paramètres optionnels refusés par certains modèles (température des modèles de raisonnement
+        # OpenAI, reasoning_effort des modèles sans réflexion) : on les retire et on rappelle
+        for key in ("reasoning_effort", "temperature"):
+            if r.status_code == 400 and key in payload and key.split("_")[0] in r.text:
+                r.close()
+                payload.pop(key)
+                r = self._post(payload, headers)
         return r
 
     def _read(self, r):

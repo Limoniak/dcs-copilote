@@ -23,7 +23,8 @@ DEFAULTS = {
             "custom": {"base_url": "", "api_key": "", "model": ""},   # Open WebUI, LM Studio...
         },
         "temperature": 0.3,
-        "answer_length": "courte",   # réponses vocales : tres_courte / courte / detaillee
+        "answer_length": "courte",
+        "fast": True,                # en vol : limiter la « réflexion » du modèle (réponse plus rapide)   # réponses vocales : tres_courte / courte / detaillee
         "custom_prompt": "",         # consignes ajoutées au prompt système (réglages → IA)
         "max_history": 6,          # nombre d'échanges question/réponse gardés en contexte
         "timeout": 120,
@@ -33,6 +34,11 @@ DEFAULTS = {
         "device": "cpu",           # "cpu" pour laisser le GPU à DCS, "cuda" si tu as de la marge en VRAM
         "compute_type": "int8",    # int8 (cpu) / float16 (cuda)
         "language": "fr",
+        "engine": "local",         # "local" (Whisper sur ce PC) ou "api" (en ligne, plus rapide)
+        "api_provider": "groq",    # groq / openai / custom
+        "api_base": "",            # vide = préréglage du fournisseur
+        "api_model": "",
+        "api_key": "",             # vide = variable GROQ_API_KEY / OPENAI_API_KEY (ou clé OpenAI de l'IA)
     },
     "tts": {
         "enabled": True,
@@ -67,6 +73,11 @@ DEFAULTS = {
             "follow_installed": True,   # + les guides des modules installés dans DCS
             "aircraft": [],        # guides choisis à la main (identifiants du site : fa-18c, f-16cm…)
         },
+    },
+    "alerts": {
+        "enabled": True,           # le copilote annonce de lui-même les situations dangereuses
+        "rules": {"gear_approach": True, "sink_rate": True, "gear_speed": True, "flaps_speed": True,
+                  "low_fuel": True, "g_load": False},
     },
     "dcs": {
         "udp_port": 7779,

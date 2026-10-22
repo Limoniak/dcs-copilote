@@ -1,4 +1,6 @@
 """Overlay toujours au premier plan : appareil, réponse en direct, question tapée, état."""
+import html
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QSizePolicy,
@@ -60,6 +62,7 @@ class Overlay(QWidget):
         self.on_speak = on_speak or (lambda on: None)
         # branchés par l'appli après construction
         self.on_mic_press = self.on_mic_release = self.on_repeat = self.on_more = lambda: None
+        self.on_checklist = lambda cmd: None
         self.collapsed = False
         self._closing = False
         self._answer = ""
@@ -155,6 +158,26 @@ class Overlay(QWidget):
         self.actions.hide()
         bl.addWidget(self.actions)
 
+        # commandes du mode checklist
+        self.cl_actions = QWidget()
+        cl = QHBoxLayout(self.cl_actions)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(6)
+        for name, text, tip, cmd in (("chevron-left", "Précédent", "Étape précédente", "prev"),
+                                     ("volume", "Répéter", "Relire l'étape", "repeat"),
+                                     ("chevron-right", "Suivant", "Étape suivante (ou appui bref sur le PTT)", "next"),
+                                     ("x", "Terminer", "Quitter la checklist", "stop")):
+            b = QPushButton(text)
+            b.setObjectName("chip")
+            b.setIcon(icon(name, ACCENT if cmd == "next" else MUTED, 13))
+            b.setToolTip(tip)
+            b.setCursor(Qt.PointingHandCursor)
+            b.clicked.connect(lambda _c=False, c=cmd: self.on_checklist(c))
+            cl.addWidget(b)
+        cl.addStretch(1)
+        self.cl_actions.hide()
+        bl.addWidget(self.cl_actions)
+
         irow = QHBoxLayout()
         irow.setSpacing(6)
         self.entry = QLineEdit()
@@ -228,6 +251,33 @@ class Overlay(QWidget):
             self.raise_()
         if self.tray:
             self._tray_toggle.setText("Masquer l'overlay" if self.isVisible() else "Afficher l'overlay")
+
+    def show_checklist(self, title, steps, i):
+        """Affiche la checklist : étapes faites (grisées), étape courante (en évidence), suivantes."""
+        def f():
+            n = len(steps)
+            self.question.setText(f"Checklist — {title}  ·  étape {min(i + 1, n)}/{n}")
+            self.question.show()
+            rows = []
+            for k in range(max(0, i - 2), min(n, i + 4)):
+                step = html.escape(steps[k])
+                if k < i:
+                    rows.append(f'<div style="color:{MUTED}">✓ {k + 1}. {step}</div>')
+                elif k == i:
+                    rows.append(f'<div style="color:{ACCENT}; font-weight:600; margin:4px 0">▶ {k + 1}. {step}</div>')
+                else:
+                    rows.append(f'<div style="color:{TEXT}">{k + 1}. {step}</div>')
+            self._answer, self._dirty = "", False
+            self.text.setHtml("".join(rows))
+            self.text.show()
+            self.actions.hide()
+            self.cl_actions.show()
+            self._notice("", MUTED)
+            self._fit()
+        self._call(f)
+
+    def hide_checklist(self):
+        self._call(lambda: (self.cl_actions.hide(), self.adjustSize()))
 
     def show_actions(self, on):
         self._call(lambda: (self.actions.setVisible(on), self.adjustSize()))
@@ -325,6 +375,7 @@ class Overlay(QWidget):
             self.question.setText(question)
             self.question.show()
             self.actions.hide()
+            self.cl_actions.hide()
             self._answer = ""
             self._dirty = True
             self._notice("", MUTED)

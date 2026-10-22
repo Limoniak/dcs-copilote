@@ -235,6 +235,7 @@ class SettingsWindow(QWidget):
         self.stack = QStackedWidget()
         self.nav = QButtonGroup(self)
         pages = (("IA", "sparkles", self._page_llm), ("Manuels", "book", self._page_manuals),
+                 ("Alertes", "bell", self._page_alerts),
                  ("Voix", "voice", self._page_voice),
                  ("Audio", "headphones", self._page_audio), ("Bouton PTT", "mic", self._page_ptt),
                  ("DCS", "plane", self._page_dcs), ("Overlay", "monitor", self._page_overlay))
@@ -429,6 +430,9 @@ class SettingsWindow(QWidget):
         lay.addWidget(conn)
 
         adv = Card("Comportement")
+        self.t_fast = adv.add("Réponse rapide en vol", Toggle(llm.get("fast", True)),
+                              "Limite la « réflexion » des modèles qui en ont (Gemini 2.5, GPT-5…) : "
+                              "1 à 3 s gagnées pour les questions vocales.", stretch=False)
         self.seg_len = adv.add("Réponses vocales", Segmented(
             [("tres_courte", "Très courtes"), ("courte", "Courtes"), ("detaillee", "Détaillées")],
             llm.get("answer_length", "courte")), "1 phrase · 2-3 phrases · jusqu'à 6. Toujours 15 mots max par "
@@ -518,6 +522,39 @@ class SettingsWindow(QWidget):
             else:
                 _show(self.llm_result, f"✓ {res[:300]}", "ok")
         self._bg(work, done)
+
+    # ------------------------------------------------------------------ Alertes
+    def _page_alerts(self):
+        from .alerts import RULES
+        w, lay = self._page("Alertes", "Le copilote prend la parole de lui-même quand la situation l'exige, "
+                                       "à partir des données de vol du script DCS.")
+        a = self.c.get("alerts", {})
+        card = Card()
+        self.t_alerts = card.add("Alertes vocales", Toggle(a.get("enabled", True)),
+                                 "Une alerte passe devant la réponse en cours.", stretch=False)
+        lay.addWidget(card)
+        rules = Card("Situations surveillées", "Seuils prudents et génériques (avions à réaction) ; les règles "
+                                               "de train et de volets sont ignorées en hélicoptère.")
+        self.t_rules = {}
+        on = a.get("rules", {})
+        for rid, (label, hint, _hold, cooldown) in RULES.items():
+            rep = ("une fois par minute" if cooldown == 60 else f"toutes les {cooldown // 60} min" if cooldown > 60
+                   else f"toutes les {cooldown} s")
+            self.t_rules[rid] = rules.add(label, Toggle(on.get(rid, True)), f"{hint} Répétée au plus {rep}.",
+                                          stretch=False)
+        lay.addWidget(rules)
+        trow = QHBoxLayout()
+        b = QPushButton("Tester une alerte")
+        b.setIcon(icon("bell", TEXT, 15))
+        b.clicked.connect(lambda: self.app.speaker.alert("Attention, train rentré en approche !"))
+        trow.addWidget(b)
+        trow.addStretch(1)
+        lay.addLayout(trow)
+        lay.addWidget(_label("Il faut le script DCS v2 (Réglages → DCS → Installer). Certains serveurs multijoueurs "
+                             "bloquent une partie des données : les alertes concernées restent alors muettes.",
+                             muted=True, wrap=True))
+        lay.addStretch(1)
+        return w
 
     # ------------------------------------------------------------------ Manuels
     def _page_manuals(self):
@@ -782,6 +819,19 @@ class SettingsWindow(QWidget):
         stt, tts = self.c["stt"], self.c["tts"]
 
         rec = Card("Reconnaissance vocale")
+        self.seg_stt = rec.add("Moteur", Segmented([("local", "Sur ce PC (Whisper)"), ("api", "En ligne (rapide)")],
+                                                   stt.get("engine", "local")))
+        self.stt_hint = rec.add_widget(_label("", muted=True, wrap=True))
+        self.cb_sttp = rec.add("Service", _combo(["groq", "openai", "custom"], stt.get("api_provider", "groq")),
+                               "Groq : gratuit (clé sur console.groq.com), ~0,3 s. OpenAI : payant.")
+        self.e_sttkey = QLineEdit(stt.get("api_key", ""))
+        self.e_sttkey.setEchoMode(QLineEdit.Password)
+        self.e_sttkey.setPlaceholderText("vide = GROQ_API_KEY / OPENAI_API_KEY (ou clé OpenAI de l'onglet IA)")
+        rec.add("Clé API", self.e_sttkey)
+        self.e_sttmodel = rec.add("Modèle", QLineEdit(stt.get("api_model", "")))
+        self.e_sttmodel.setPlaceholderText("vide = whisper-large-v3-turbo (Groq) / gpt-4o-mini-transcribe (OpenAI)")
+        self.e_sttbase = rec.add("Adresse", QLineEdit(stt.get("api_base", "")))
+        self.e_sttbase.setPlaceholderText("vide = adresse du service choisi")
         self.cb_stt = rec.add("Modèle Whisper", _combo(WHISPER_MODELS, stt["model"], editable=True),
                               "small : bon compromis sur CPU. medium / large-v3 : plus précis, plus lents.")
         self.seg_dev = rec.add("Calcul", Segmented([("cpu", "Processeur"), ("cuda", "Carte graphique")],
@@ -795,6 +845,8 @@ class SettingsWindow(QWidget):
         self.e_lang.setFixedWidth(110)
         rec.add("Langue", self.e_lang, "fr, en… (vide = détection automatique)", stretch=False)
         lay.addWidget(rec)
+        self.seg_stt.changed.connect(self._stt_engine_changed)
+        self._stt_engine_changed(self.seg_stt.value())
 
         syn = Card("Synthèse vocale")
         self.t_tts = syn.add("Lire les réponses", Toggle(tts["enabled"]), stretch=False)
@@ -834,6 +886,14 @@ class SettingsWindow(QWidget):
         self.seg_engine.changed.connect(self._engine_changed)
         self._engine_changed(self.seg_engine.value())
         return w
+
+    def _stt_engine_changed(self, engine):
+        for wdg in (self.cb_sttp, self.e_sttkey, self.e_sttmodel, self.e_sttbase):
+            wdg.row.setVisible(engine == "api")
+        self.stt_hint.setText(
+            "Ta voix est envoyée au service choisi : transcription en ~0,3 s au lieu de 1 à 3 s sur processeur. "
+            "Whisper local reste chargé et prend le relais si le service ne répond pas." if engine == "api" else
+            "Gratuit et hors-ligne ; 1 à 3 s de transcription sur processeur selon le modèle.")
 
     def _engine_changed(self, engine):
         rows = {"edge": [self.cb_edge], "openai": [self.cb_openai, self.e_okey],
@@ -1159,10 +1219,13 @@ class SettingsWindow(QWidget):
     def _collect(self):
         c = self.c
         self._store_provider()
-        c["llm"].update(answer_length=self.seg_len.value() or "courte",
+        c["llm"].update(answer_length=self.seg_len.value() or "courte", fast=self.t_fast.isChecked(),
                         custom_prompt=self.e_custom.toPlainText().strip(),
                         temperature=self.s_temp.value() / 10, max_history=self.s_hist.value(),
                         timeout=self.s_timeout.value())
+        c["stt"].update(engine=self.seg_stt.value() or "local", api_provider=self.cb_sttp.currentText().strip(),
+                        api_key=self.e_sttkey.text().strip(), api_model=self.e_sttmodel.text().strip(),
+                        api_base=self.e_sttbase.text().strip())
         c["stt"].update(model=self.cb_stt.currentText().strip(), device=self.seg_dev.value() or "cpu",
                         compute_type=self.cb_ct.currentText().strip(),
                         language=self.e_lang.text().strip() or None)
@@ -1174,6 +1237,8 @@ class SettingsWindow(QWidget):
         for key, (cb, mapping) in self.devices.items():
             c["audio"][key] = mapping.get(cb.currentText())
         c["audio"]["beeps"] = self.t_beeps.isChecked()
+        c["alerts"] = {"enabled": self.t_alerts.isChecked(),
+                       "rules": {rid: t.isChecked() for rid, t in self.t_rules.items()}}
         c["manuals"].update(enabled=self.t_manuals.isChecked(), dcs_dir=self.cb_dcsdir.get().strip(),
                             extra_dir=self.e_extra.get().strip())
         c["manuals"]["chucks"] = {"enabled": self.t_chucks.isChecked(), "follow_installed": self.t_follow.isChecked(),

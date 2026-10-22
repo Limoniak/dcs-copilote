@@ -6,6 +6,7 @@ import time
 from collections import deque
 
 from . import aircraft as ac
+from . import checklist as cl
 from . import config as cfgmod
 from .llm import LLMClient, LLMError, needs_key
 from .prompts import system_prompt
@@ -41,6 +42,8 @@ class App:
         ov = self.overlay
         ov.on_mic_press, ov.on_mic_release = self.on_press, self.on_release
         ov.on_repeat, ov.on_more = self.repeat, self.more
+        ov.on_checklist = self.checklist_cmd
+        self.checklist = None
         self.last_answer = ""
         self.warned_old_script = False
         if not cfg["overlay"].get("enabled", True):
@@ -51,9 +54,15 @@ class App:
         self._open_recorder()
         self.speaker = Speaker(make_tts(cfg["tts"], self.log, cfg["llm"]), cfg["audio"]["output_device"],
                                lambda: self.gen, self.log)
+        self.speaker.on_start = self._on_voice_start
         self.speaker.start()
+        self.lat = {}                          # mesures de latence de la question en cours
+        self.stt_api = None
 
-        self.dcs = DCSLink(int(cfg["dcs"]["udp_port"]), self.on_dcs, self.log)
+        self._make_stt_api()
+        from .alerts import Alerts
+        self.alerts = Alerts(lambda: self.cfg.get("alerts", {}), self._announce_alert)
+        self.dcs = DCSLink(int(cfg["dcs"]["udp_port"]), self.on_dcs, self.log, self.alerts.feed)
         self.dcs.start()
 
         self.ptt = None
@@ -160,11 +169,14 @@ class App:
         if cfg["dcs"]["udp_port"] != old["dcs"]["udp_port"]:
             self.dcs.stop()
             self.dcs.join(timeout=3)
-            self.dcs = self._DCSLink(int(cfg["dcs"]["udp_port"]), self.on_dcs, self.log)
+            self.dcs = self._DCSLink(int(cfg["dcs"]["udp_port"]), self.on_dcs, self.log, self.alerts.feed)
             self.dcs.start()
         if cfg["manuals"].get("enabled") and not old["manuals"].get("enabled"):
             self.load_manuals()
-        if cfg["stt"] != old["stt"]:
+        local = ("model", "device", "compute_type", "language")
+        if cfg["stt"] != old["stt"] or cfg["llm"] != old["llm"]:
+            self._make_stt_api()
+        if any(cfg["stt"].get(k) != old["stt"].get(k) for k in local):
             self._load_stt()
         elif self.stt is not None:
             self._ready()
@@ -190,6 +202,8 @@ class App:
         return ac.pretty(self.dcs_aircraft) if self.dcs_aircraft else self.manual_aircraft
 
     def _ready_status(self):
+        if self.checklist is not None:
+            return "Checklist — appui bref sur le PTT ou « suivant » : étape suivante"
         if self.ptt is None:
             return "Prêt — aucun bouton PTT (⚙ Réglages)"
         return f"Prêt — maintiens {self.ptt.describe()} pour parler"
@@ -274,6 +288,43 @@ class App:
             return "", ""
         return format_context(res), sources_line(res)
 
+    def _make_stt_api(self):
+        from .stt import ApiSTT
+        self.stt_api = None
+        if self.cfg["stt"].get("engine") == "api":
+            try:
+                self.stt_api = ApiSTT(self.cfg["stt"], self.cfg["llm"])
+            except Exception as e:  # noqa: BLE001
+                self.log(f"Reconnaissance en ligne indisponible ({e}) → Whisper local", error=True)
+
+    def _transcribe(self, audio):
+        """En ligne si configuré (rapide), sinon / en cas d'échec Whisper local."""
+        if self.stt_api is not None:
+            try:
+                return self.stt_api.transcribe(audio, self.current_aircraft()), "en ligne"
+            except Exception as e:  # noqa: BLE001
+                print(f"[STT en ligne] échec ({e}) → Whisper local", flush=True)
+        if self.stt is None:
+            raise RuntimeError("Whisper pas encore prêt…")
+        return self.stt.transcribe(audio, self.current_aircraft()), "local"
+
+    def _on_voice_start(self, gen):
+        lat = self.lat
+        if lat.get("gen") == gen and lat.get("voice") is None:
+            lat["voice"] = time.monotonic() - lat["t0"]
+            self._log_latency()
+
+    def _log_latency(self):
+        lat = self.lat
+        parts = []
+        if lat.get("stt") is not None:
+            parts.append(f"transcription {lat['stt']:.1f} s ({lat.get('stt_engine')})")
+        if lat.get("first") is not None:
+            parts.append(f"1er mot de l'IA {lat['first']:.1f} s")
+        if lat.get("voice") is not None:
+            parts.append(f"début de la voix {lat['voice']:.1f} s")
+        print("[latence, depuis la fin de la question] " + " · ".join(parts), flush=True)
+
     def _load_stt(self):
         from .stt import STT
         print(f"Chargement de Whisper « {self.cfg['stt']['model']} »…", flush=True)
@@ -310,6 +361,7 @@ class App:
             self.overlay.info(f"Appareil : {name}")
 
     def reset(self):
+        self.checklist = None
         self._new_gen()
         self.speaker.stop()
         self.history.clear()
@@ -342,10 +394,13 @@ class App:
         self.recording = False
         audio = self.recorder.stop()
         if len(audio) < MIN_AUDIO_S * 16000:
-            self._ready()
+            if self.checklist is not None:
+                self.checklist_cmd("next")     # appui bref = étape suivante
+            else:
+                self._ready()
             return
         self._beep(1)
-        self.jobs.put(("voice", audio, self.gen))
+        self.jobs.put(("voice", (audio, time.monotonic()), self.gen))
 
     def repeat(self):
         """Relit la dernière réponse (bouton « Répéter »)."""
@@ -375,24 +430,112 @@ class App:
                 continue
             try:
                 if kind == "voice":
-                    if self.stt is None:
-                        self.log("Whisper pas encore prêt…", error=True)
-                        continue
+                    audio, t0 = payload
                     self.overlay.set_status("Transcription…", state="busy")
-                    t0 = time.monotonic()
-                    question = self.stt.transcribe(payload, self.current_aircraft())
+                    question, engine = self._transcribe(audio)
                     if gen != self.gen:
                         continue
+                    self.lat = {"gen": gen, "t0": t0, "stt": time.monotonic() - t0, "stt_engine": engine}
                     if not question:
                         self._beep(2)
                         self.overlay.set_status("Je n'ai rien compris, réessaie", state="ready")
                         continue
-                    print(f"[STT {time.monotonic() - t0:.1f}s] {question}", flush=True)
-                    self._answer(question, "vol", True, gen)
+                    print(f"[question] {question}", flush=True)
+                    self._route(question, "vol", True, gen)
                 else:
-                    self._answer(payload, "sol", self.cfg["tts"].get("speak_typed", False), gen)
+                    self.lat = {"gen": gen, "t0": time.monotonic()}
+                    self._route(payload, "sol", self.cfg["tts"].get("speak_typed", False), gen)
             except Exception as e:  # noqa: BLE001
                 self.log(f"Erreur : {e}", error=True)
+
+    def _route(self, question, mode, speak, gen):
+        """Commande de checklist, démarrage d'une checklist, ou question ordinaire."""
+        cmd = cl.command(question) if self.checklist is not None else None
+        if cmd:
+            self.checklist_cmd(cmd)
+        elif cl.is_start(question):
+            self._start_checklist(question, gen)
+        else:
+            self._answer(question, mode, speak, gen)
+
+    # ------------------------------------------------------------------ checklist
+    def _start_checklist(self, question, gen):
+        import re
+        self.overlay.start_answer(question)
+        self.overlay.set_status("Préparation de la checklist…", state="busy")
+        manual, sources = self._manual_context(question)
+        system = system_prompt(self.current_aircraft(), self.dcs.snapshot(), "sol",
+                               custom=self.cfg["llm"].get("custom_prompt", ""), manual=manual)
+        messages = [{"role": "system", "content": system + "\n\n" + cl.PROMPT},
+                    {"role": "user", "content": question}]
+        try:
+            if self.llm is None:
+                raise LLMError("IA non configurée : ⚙ Réglages → IA")
+            text = "".join(self.llm.stream(messages, alive=lambda: gen == self.gen, fast=True))
+        except LLMError as e:
+            self._beep(2)
+            self.overlay.append(f"\n{e}\n", "err")
+            self.log("Erreur IA", error=True)
+            return
+        if gen != self.gen:
+            return
+        steps = cl.parse_steps(text)
+        if len(steps) < 2:
+            self.overlay.append("Je ne trouve pas cette procédure pour cet appareil. Précise-la, "
+                                "par exemple « checklist démarrage ».", "err")
+            self._ready()
+            return
+        title = re.sub(r"^(lance|démarre|commence|déroule|fais)(-moi|-nous)?\s+(la |une |le )?", "",
+                       question.strip().rstrip("?.!"), flags=re.I)
+        self.checklist = cl.Checklist(title[:1].upper() + title[1:], steps)
+        self.history.append({"role": "user", "content": question})
+        self.history.append({"role": "assistant", "content": "\n".join(f"{n}. {s}" for n, s in enumerate(steps, 1))})
+        print(f"[checklist] {title} : {len(steps)} étapes", flush=True)
+        self._show_step(first=True)
+        if sources:
+            self.overlay.info(sources)
+
+    def _show_step(self, first=False):
+        c = self.checklist
+        self.overlay.show_checklist(c.title, c.steps, c.i)
+        gen = self._new_gen()
+        self.speaker.stop()
+        self.speaker.say(c.spoken(first), gen)
+        self._ready()
+
+    def checklist_cmd(self, cmd):
+        """Suivant / précédent / répéter / stop (boutons, voix ou appui bref sur le PTT)."""
+        c = self.checklist
+        if c is None:
+            return
+        if cmd == "stop":
+            self.checklist = None
+            self.overlay.hide_checklist()
+            self.overlay.info("Checklist arrêtée.")
+            self._ready()
+            return
+        if cmd == "next":
+            c.i += 1
+        elif cmd == "prev":
+            c.i = max(0, c.i - 1)
+        if c.done:
+            self.checklist = None
+            gen = self._new_gen()
+            self.speaker.stop()
+            self.speaker.say(f"Checklist {c.title} terminée.", gen)
+            self.overlay.show_checklist(c.title, c.steps, len(c.steps))
+            self.overlay.hide_checklist()
+            self.overlay.info(f"✓ Checklist terminée ({len(c.steps)} étapes).")
+            self._ready()
+            return
+        self._show_step()
+
+    # ------------------------------------------------------------------ alertes
+    def _announce_alert(self, msg):
+        print(f"[alerte] {msg}", flush=True)
+        self.overlay.append(msg, "err")
+        self.overlay.set_status(msg, error=True)
+        self.speaker.alert(msg)
 
     def _answer(self, question, mode, speak, gen):
         flight = self.dcs.snapshot()
@@ -410,11 +553,14 @@ class App:
         try:
             if self.llm is None:
                 raise LLMError("IA non configurée : ⚙ Réglages → IA")
-            for delta in self.llm.stream(messages, alive=lambda: gen == self.gen,
+            fast = mode == "vol" and self.cfg["llm"].get("fast", True)
+            for delta in self.llm.stream(messages, alive=lambda: gen == self.gen, fast=fast,
                                          on_retry=lambda m: self.overlay.set_status(m, state="busy")):
                 if gen != self.gen:
                     cancelled = True
                     break
+                if self.lat.get("gen") == gen and self.lat.get("first") is None:
+                    self.lat["first"] = time.monotonic() - self.lat["t0"]
                 full.append(delta)
                 self.overlay.append(delta)
                 if speak:
@@ -427,6 +573,8 @@ class App:
             return
         if cancelled:
             return
+        if not speak and self.lat.get("gen") == gen:
+            self._log_latency()
         if speak:
             for s in splitter.flush():
                 self.speaker.say(s, gen)
