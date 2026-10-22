@@ -80,39 +80,94 @@ def download_voice(name, dest="voices"):
     return os.path.join(dest, name + ".onnx")
 
 
-_formats = {}
+class _Output:
+    """Sortie audio unique, ouverte en permanence et alimentée par un tampon (rappel PortAudio).
 
+    sd.play / sd.stop / sd.wait partagent un flux global et ne supportent pas d'être appelés depuis
+    plusieurs threads : couper la voix pendant une lecture pouvait bloquer définitivement la fermeture
+    du flux (plus aucune voix). Ici, rien ne s'ouvre ni ne se ferme pendant les lectures : on remplace
+    ou on vide le tampon, et une attente ne peut pas durer plus que le son lui-même (+ 3 s)."""
 
-def _fit_output(audio, sr, device):
-    """Adapte fréquence et nombre de canaux à ce que la sortie accepte (sinon : silence ou erreur)."""
-    k = (device, sr)
-    if k not in _formats:
-        rate, ch = sr, 1
-        try:
-            sd.check_output_settings(device=device, samplerate=sr, channels=1)
-        except Exception:  # noqa: BLE001
+    def __init__(self):
+        self.lock = threading.Lock()           # tampon (partagé avec le rappel audio)
+        self.open_lock = threading.Lock()      # ouverture du flux
+        self.stream, self.device, self.rate, self.ch = None, object(), 48000, 1
+        self.buf, self.pos, self.token = None, 0, 0
+        self.done = threading.Event()
+        self.done.set()
+
+    def _ensure(self, device):
+        with self.open_lock:
+            if self.stream is not None and self.device == device:
+                return
             rate = int(sd.query_devices(device, "output")["default_samplerate"])
+            ch = 1
             try:
                 sd.check_output_settings(device=device, samplerate=rate, channels=1)
             except Exception:  # noqa: BLE001
                 ch = 2
-        _formats[k] = (rate, ch)
-    rate, ch = _formats[k]
-    if audio.dtype == np.int16:
-        audio = audio.astype(np.float32) / 32768.0
-    if rate != sr:
-        n = int(len(audio) * rate / sr)
-        audio = np.interp(np.linspace(0, len(audio) - 1, n), np.arange(len(audio)), audio).astype(np.float32)
-    if ch == 2:
-        audio = np.column_stack([audio, audio])
-    return audio, rate
+            stream = sd.OutputStream(samplerate=rate, channels=ch, dtype="float32", device=device,
+                                     callback=self._callback, blocksize=1024)
+            stream.start()
+            old, self.stream = self.stream, stream
+            self.device, self.rate, self.ch = device, rate, ch
+        if old is not None:
+            try:
+                old.abort()
+                old.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _callback(self, outdata, frames, _time, _status):
+        with self.lock:
+            buf = self.buf
+            if buf is None:
+                outdata.fill(0)
+                return
+            n = min(frames, len(buf) - self.pos)
+            outdata[:n] = buf[self.pos:self.pos + n, None]
+            outdata[n:] = 0
+            self.pos += n
+            if self.pos >= len(buf):
+                self.buf = None
+                self.done.set()
+
+    def play(self, audio, sr, device=None, wait=False):
+        self._ensure(device)
+        x = audio.astype(np.float32) / (32768.0 if audio.dtype == np.int16 else 1.0)
+        if x.ndim > 1:
+            x = x.mean(axis=1)
+        if sr != self.rate and len(x):
+            n = int(len(x) * self.rate / sr)
+            x = np.interp(np.linspace(0, len(x) - 1, n), np.arange(len(x)), x).astype(np.float32)
+        with self.lock:
+            self.token += 1
+            token = self.token
+            self.buf, self.pos = x, 0
+            self.done.clear()
+        if wait:
+            end = time.monotonic() + len(x) / self.rate + 3
+            while time.monotonic() < end and not self.done.wait(0.05):
+                with self.lock:
+                    if self.token != token:        # coupé (stop) ou remplacé par un autre son
+                        return
+
+    def stop(self):
+        with self.lock:
+            self.token += 1
+            self.buf = None
+            self.done.set()
+
+
+_OUT = _Output()
 
 
 def play(audio, sr, device=None, wait=False):
-    audio, rate = _fit_output(audio, sr, device)
-    sd.play(audio, rate, device=device)
-    if wait:
-        sd.wait()
+    _OUT.play(audio, sr, device, wait)
+
+
+def stop_playback():
+    _OUT.stop()
 
 
 # --------------------------------------------------------------------------- micro
@@ -507,7 +562,7 @@ class Speaker(threading.Thread):
                     q.get_nowait()
             except queue.Empty:
                 pass
-        sd.stop()
+        stop_playback()
 
     def play(self, sound):
         audio, sr = sound
@@ -538,7 +593,7 @@ class Speaker(threading.Thread):
         if audio is not None and (gen is None or gen == self.current_gen()):
             self.audio_q.put((prio, seq, audio, sr, gen))
             if prio == 0 and self.busy.is_set():
-                sd.stop()                  # l'alerte coupe la phrase en cours
+                stop_playback()            # l'alerte coupe la phrase en cours
 
     def _player(self):
         while True:
