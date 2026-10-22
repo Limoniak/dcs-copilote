@@ -11,51 +11,57 @@ on:
 permissions:
   contents: write          # publier la Release
 
+env:
+  PYTHONUTF8: "1"
+
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
 
-      - name: Dépendances
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+      # une commande par étape : la moindre erreur arrête la fabrication à l'endroit fautif
+      - name: Mise à jour de pip
+        run: python -m pip install --upgrade pip
 
-      - name: Voix Piper et icône
-        run: |
-          python main.py --download-voice fr_FR-siwis-medium
-          python build/make_icon.py
+      - name: Dépendances
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Voix Piper
+        run: python main.py --download-voice fr_FR-siwis-medium
+
+      - name: Icône
+        run: python build/make_icon.py
 
       - name: Construction
         run: pyinstaller --noconfirm build/dcs-copilote.spec
 
       - name: Voix livrée avec l'appli
-        shell: pwsh
         run: Copy-Item -Recurse voices dist/DCS-Copilote/voices
 
       - name: Vérification (--selftest)
-        shell: pwsh
         working-directory: dist/DCS-Copilote
         run: |
           $p = Start-Process -FilePath .\DCS-Copilote.exe -ArgumentList "--selftest" -Wait -PassThru
-          Get-Content selftest.log
+          Get-Content selftest.log -Encoding utf8
           Remove-Item selftest.log
           if ($p.ExitCode -ne 0) { exit 1 }
 
       - name: Archive
-        shell: pwsh
         run: |
           $name = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "dev-$($env:GITHUB_SHA.Substring(0,7))" }
           Compress-Archive -Path dist/DCS-Copilote -DestinationPath "DCS-Copilote-$name-windows.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: DCS-Copilote-windows
           path: DCS-Copilote-*-windows.zip
@@ -63,7 +69,7 @@ jobs:
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: DCS-Copilote-*-windows.zip
           generate_release_notes: true

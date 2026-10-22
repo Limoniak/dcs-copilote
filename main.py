@@ -17,6 +17,11 @@ import sys
 
 # Version empaquetée (.exe PyInstaller) : les fichiers de l'utilisateur (config, journal, manuels,
 # voix) vont à côté de l'exécutable ; sinon à côté de ce script.
+# Console Windows en cp1252 : un accent ou un symbole (⚙) faisait planter print(). Sortie en UTF-8.
+for _stream in (sys.stdout, sys.stderr):
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 FROZEN = getattr(sys, "frozen", False)
 HERE = os.path.dirname(sys.executable if FROZEN else os.path.abspath(__file__))
 os.chdir(HERE)
