@@ -178,6 +178,43 @@ BEEP_ERR = _tone([300, 220], dur=0.12)
 TEST_CHIME = _tone([523, 659, 784, 1047], dur=0.16, vol=0.3)   # do-mi-sol-do
 
 
+# --------------------------------------------------------------------------- effet radio
+# niveau : (fréquence basse, fréquence haute, saturation, souffle)
+RADIO_LEVELS = {1: (250, 4000, 1.6, 0.003), 2: (300, 3200, 2.6, 0.007), 3: (450, 2600, 4.0, 0.014)}
+
+
+def _bandpass(x, sr, lo, hi, order=4):
+    """Filtre passe-bande (gabarit de Butterworth appliqué dans le domaine fréquentiel)."""
+    n = len(x)
+    f = np.fft.rfftfreq(n, 1 / sr)
+    f[0] = 1e-3
+    h = 1 / np.sqrt(1 + (lo / f) ** (2 * order)) / np.sqrt(1 + (f / hi) ** (2 * order))
+    return np.fft.irfft(np.fft.rfft(x) * h, n).astype(np.float32)
+
+
+def radio_fx(audio, sr, level=2):
+    """Voix « radio de cockpit » : bande étroite, légère saturation, souffle."""
+    lo, hi, drive, hiss = RADIO_LEVELS.get(level, RADIO_LEVELS[2])
+    x = audio.astype(np.float32) / (32768.0 if audio.dtype == np.int16 else 1.0)
+    x = _bandpass(x, sr, lo, hi)
+    x = np.tanh(drive * x / (np.abs(x).max() + 1e-6)) / np.tanh(drive)
+    noise = _bandpass(np.random.default_rng().normal(0, 1, len(x)).astype(np.float32), sr, lo, hi)
+    x = x + hiss * noise / (np.abs(noise).max() + 1e-6) * 3
+    return (0.6 * x / (np.abs(x).max() + 1e-6)).astype(np.float32)   # saturée = plus forte à crête égale
+
+
+def squelch(sr, level=2, kind="open"):
+    """Clic d'ouverture (« open ») ou souffle de fin de transmission (« tail »)."""
+    lo, hi, _drive, _hiss = RADIO_LEVELS.get(level, RADIO_LEVELS[2])
+    dur = 0.04 if kind == "open" else 0.16
+    n = int(sr * dur)
+    noise = _bandpass(np.random.default_rng().normal(0, 1, n).astype(np.float32), sr, lo, hi)
+    env = np.exp(-np.linspace(0, 7 if kind == "open" else 4, n)).astype(np.float32)
+    burst = 0.5 * noise / (np.abs(noise).max() + 1e-6) * env
+    gap = np.zeros(int(sr * 0.03), np.float32)
+    return np.concatenate([burst, gap]) if kind == "open" else np.concatenate([gap, burst])
+
+
 # --------------------------------------------------------------------------- TTS
 class PiperTTS:
     def __init__(self, model_path, speed=1.0):
@@ -446,6 +483,9 @@ class Speaker(threading.Thread):
         self._seq = itertools.count()
         self.busy = threading.Event()
         self.on_start = None                   # on_start(gen) : début de lecture d'une phrase (mesure de latence)
+        self.radio = 0                         # effet radio : 0 = aucun, 1 léger, 2 radio, 3 fort
+        self._keyed = None                     # transmission en cours (clic d'ouverture déjà joué)
+        self._synth_busy = False
         threading.Thread(target=self._player, daemon=True).start()
 
     def say(self, text, gen):
@@ -460,6 +500,7 @@ class Speaker(threading.Thread):
             self.q.put((0, next(self._seq), text, None))
 
     def stop(self):
+        self._keyed = None
         for q in (self.q, self.audio_q):
             try:
                 while True:
@@ -480,11 +521,14 @@ class Speaker(threading.Thread):
             tts = self.tts
             if tts is None:
                 continue
+            self._synth_busy = True
             try:
                 audio, sr = tts.synth(text)
             except Exception as e:  # noqa: BLE001
                 self.log(f"Erreur TTS : {e}")
                 continue
+            finally:
+                self._synth_busy = False
             if audio is not None and (gen is None or gen == self.current_gen()):
                 self.audio_q.put((prio, seq, audio, sr, gen))
                 if prio == 0 and self.busy.is_set():
@@ -498,8 +542,19 @@ class Speaker(threading.Thread):
             self.busy.set()
             if self.on_start:
                 self.on_start(gen)
+            level = self.radio
             try:
+                if level:
+                    audio = radio_fx(audio, sr, level)
+                    key = ("alerte", _seq) if gen is None else gen
+                    if self._keyed != key:         # début de transmission : clic d'ouverture
+                        audio = np.concatenate([squelch(sr, level, "open"), audio])
+                        self._keyed = key
                 play(audio, sr, self.device, wait=True)
+                # fin de transmission (plus rien à dire) : souffle de squelch
+                if level and self.q.empty() and self.audio_q.empty() and not self._synth_busy:
+                    play(squelch(sr, level, "tail"), sr, self.device, wait=True)
+                    self._keyed = None
             except Exception as e:  # noqa: BLE001
                 self.log(f"Erreur audio : {e}")
             finally:

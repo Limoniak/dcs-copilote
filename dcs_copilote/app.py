@@ -55,6 +55,7 @@ class App:
         self.speaker = Speaker(make_tts(cfg["tts"], self.log, cfg["llm"]), cfg["audio"]["output_device"],
                                lambda: self.gen, self.log)
         self.speaker.on_start = self._on_voice_start
+        self.speaker.radio = int(cfg["tts"].get("radio", 0))
         self.speaker.start()
         self.lat = {}                          # mesures de latence de la question en cours
         self.stt_api = None
@@ -145,6 +146,7 @@ class App:
         if cfg["llm"] != old["llm"]:
             self.llm = self._make_llm()
             self.history = deque(self.history, maxlen=2 * int(cfg["llm"]["max_history"]))
+        self.speaker.radio = int(cfg["tts"].get("radio", 0))
         if cfg["tts"].get("speak_typed") != old["tts"].get("speak_typed"):
             self.overlay.set_speak(cfg["tts"].get("speak_typed", False))
         if cfg["overlay"] != old["overlay"]:
@@ -163,7 +165,9 @@ class App:
     def _apply_slow(self, old):
         """Ce qui prend du temps (modèles, port UDP) se fait hors de l'interface."""
         cfg = self.cfg
-        if cfg["tts"] != old["tts"] or (cfg["tts"].get("engine") == "openai" and cfg["llm"] != old["llm"]):
+        voice_keys = [k for k in cfg["tts"] if k not in ("radio", "speak_typed")]
+        if any(cfg["tts"].get(k) != old["tts"].get(k) for k in voice_keys) or \
+                (cfg["tts"].get("engine") == "openai" and cfg["llm"] != old["llm"]):
             self.speaker.stop()
             self.speaker.tts = self._make_tts(cfg["tts"], self.log, cfg["llm"])
         if cfg["dcs"]["udp_port"] != old["dcs"]["udp_port"]:

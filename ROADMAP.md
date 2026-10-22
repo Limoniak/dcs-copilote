@@ -37,6 +37,9 @@ L'overlay est invisible en VR et en plein écran exclusif : il ne reste que la v
 - [x] Faire parler la voix dès le premier morceau de phrase
 - [ ] Garder une connexion ouverte avec la voix Microsoft (gain ~0,5 s par phrase)
 
+## Fait en plus
+- [x] Effet radio sur la voix (bande étroite, saturation, souffle, squelch)
+
 ## 6. Installeur Windows
 - [ ] `.exe` sans installation de Python (PyInstaller), mises à jour via les versions GitHub
 

@@ -49,7 +49,8 @@ DEFAULTS = {
         "openai_key": "",          # vide = clé OpenAI de l'onglet IA, sinon OPENAI_API_KEY
         "piper_model": "voices/fr_FR-siwis-medium.onnx",
         "speed": 1.1,              # >1 = plus rapide
-        "speak_typed": False,      # lire aussi à voix haute les questions tapées
+        "speak_typed": False,
+        "radio": 0,                # effet radio sur la voix : 0 aucun, 1 léger, 2 radio, 3 fort      # lire aussi à voix haute les questions tapées
     },
     "audio": {
         "input_device": None,      # index ou nom (voir --devices), None = défaut

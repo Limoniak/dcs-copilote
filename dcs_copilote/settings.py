@@ -871,6 +871,9 @@ class SettingsWindow(QWidget):
         self.b_dl.clicked.connect(self._download_voice)
         dl.addWidget(self.b_dl)
         self.dl_row = syn.add("Autre voix", drow, "huggingface.co/rhasspy/piper-voices (ex. en_US-amy-medium)")
+        self.seg_radio = syn.add("Effet radio", Segmented(
+            [("0", "Aucun"), ("1", "Léger"), ("2", "Radio"), ("3", "Fort")], str(tts.get("radio", 0))),
+            "Son de casque radio, clic d'ouverture et souffle de fin de transmission.", stretch=False)
         self.s_speed = syn.add("Débit", Slider(60, 180, float(tts.get("speed", 1.0)) * 100,
                                                lambda v: f"×{v / 100:.2f}"))
         trow = QHBoxLayout()
@@ -929,7 +932,7 @@ class SettingsWindow(QWidget):
         self._bg(lambda: download_voice(name), done)
 
     def _test_voice(self):
-        from .audio import _dev, make_tts, play
+        from .audio import _dev, make_tts, play, radio_fx, squelch
         self._collect()
         tts_cfg, out = dict(self.c["tts"], enabled=True), self.c["audio"]["output_device"]
         llm_cfg = copy.deepcopy(self.c["llm"])
@@ -942,6 +945,11 @@ class SettingsWindow(QWidget):
             audio, sr = tts.synth(TEST_PHRASE)
             if audio is None:
                 raise RuntimeError("aucun son produit")
+            level = int(tts_cfg.get("radio", 0))
+            if level:
+                import numpy as np
+                audio = np.concatenate([squelch(sr, level, "open"), radio_fx(audio, sr, level),
+                                        squelch(sr, level, "tail")])
             play(audio, sr, _dev(out))
             return " ".join(notes)
 
@@ -1233,6 +1241,7 @@ class SettingsWindow(QWidget):
                         engine=self.seg_engine.value() or "piper",
                         edge_voice=self.cb_edge.currentText().strip(),
                         openai_voice=self.cb_openai.currentText().strip(), openai_key=self.e_okey.text().strip(),
+                        radio=int(self.seg_radio.value() or 0),
                         piper_model=self.cb_voice.currentText().strip(), speed=self.s_speed.value() / 100)
         for key, (cb, mapping) in self.devices.items():
             c["audio"][key] = mapping.get(cb.currentText())
