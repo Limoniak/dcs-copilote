@@ -24,16 +24,20 @@ class KeyboardPTT:
         from pynput import keyboard
         self.key_name = key_name.lower()
         self.down = False
+        self.down_vk = None                    # touche physique enfoncée
         self.on_press, self.on_release = on_press, on_release
         self.listener = keyboard.Listener(on_press=self._press, on_release=self._release)
 
     def _press(self, key):
         if key_to_str(key) == self.key_name and not self.down:  # ignore l'auto-répétition
-            self.down = True
+            self.down, self.down_vk = True, getattr(key, "vk", None)
             self.on_press()
 
     def _release(self, key):
-        if key_to_str(key) == self.key_name and self.down:
+        # touche qui demande Maj (« ? » en AZERTY) : Maj relâchée d'abord, elle remonte sous un autre caractère ;
+        # on la reconnaît alors par son code physique, sinon l'enregistrement durerait jusqu'à la limite (30 s)
+        same_key = self.down_vk is not None and getattr(key, "vk", None) == self.down_vk
+        if self.down and (key_to_str(key) == self.key_name or same_key):
             self.down = False
             self.on_release()
 
@@ -112,7 +116,19 @@ class JoystickPTT(threading.Thread):
             time.sleep(0.008)
 
 
+def _safe(fn):
+    """Une erreur dans l'appli (micro débranché…) ne doit pas tuer l'écoute du bouton : pynput arrête son écouteur
+    à la première exception, et le thread joystick mourrait. Le bouton ne répondrait plus jusqu'au redémarrage."""
+    def call():
+        try:
+            fn()
+        except Exception as e:  # noqa: BLE001
+            print(f"[PTT] {e}", flush=True)
+    return call
+
+
 def make_ptt(cfg, on_press, on_release, log):
+    on_press, on_release = _safe(on_press), _safe(on_release)
     if cfg.get("type") == "joystick":
         return JoystickPTT(cfg["joystick_name"], cfg.get("joystick_guid", ""), cfg["button"],
                            on_press, on_release, log)

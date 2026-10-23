@@ -158,6 +158,8 @@ def update(slugs, progress=lambda msg, frac=None: None, should_stop=lambda: Fals
                     if size:
                         progress(f"Téléchargement : {name} ({got >> 20} / {size >> 20} Mo)",
                                  (i + got / size) / len(slugs))
+            if size and got != size:     # coupé sans erreur : un PDF tronqué serait gardé pour de bon (même ETag)
+                raise OSError(f"téléchargement incomplet ({got >> 20} / {size >> 20} Mo)")
             os.replace(path + ".part", path)
             old = known.get("file")
             if old and old != fname and os.path.exists(os.path.join(DATA_DIR, old)):
