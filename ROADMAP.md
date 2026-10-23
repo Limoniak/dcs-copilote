@@ -36,7 +36,7 @@ L'overlay est invisible en VR et en plein écran exclusif : il ne reste que la v
 - [x] Reconnaissance vocale en ligne optionnelle (OpenAI, Groq…) avec repli sur Whisper local
 - [x] Réponse rapide en vol : limiter la « réflexion » des modèles qui en ont (Gemini 2.5, GPT-5…)
 - [x] Faire parler la voix dès le premier morceau de phrase
-- [ ] Garder une connexion ouverte avec la voix Microsoft (gain ~0,5 s par phrase)
+- [x] Garder une connexion ouverte avec la voix Microsoft (0,3-0,45 s par phrase au lieu de ~1 s, ouverte dès l'appui sur le PTT)
 
 ## Fait en plus
 - [x] Effet radio sur la voix (bande étroite, saturation, souffle, squelch)

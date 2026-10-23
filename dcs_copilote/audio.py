@@ -379,6 +379,98 @@ class EdgeTTS:
         self.rate = f"{round((float(speed) - 1) * 100):+d}%"
         self.split = "Multilingual" in self.voice
         _edge_locale_patch(self.voice)
+        self._loop = self._session = self._ws = None
+        self._alock = None
+
+    # Connexion gardée ouverte : ~0,45 s par phrase au lieu de ~1 s avec edge_tts.Communicate, qui rouvre une
+    # connexion à chaque phrase. Reprend les briques d'edge-tts ; au moindre échec, retour à Communicate.
+    def _run(self, coro, timeout=12):
+        import asyncio
+        if self._loop is None:
+            self._loop = asyncio.new_event_loop()
+            threading.Thread(target=self._loop.run_forever, daemon=True).start()
+        fut = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        try:
+            return fut.result(timeout)
+        except BaseException:
+            fut.cancel()
+            raise
+
+    async def _connect(self):
+        import aiohttp
+        from edge_tts import communicate as c
+        from edge_tts.constants import SEC_MS_GEC_VERSION, WSS_HEADERS, WSS_URL
+        from edge_tts.drm import DRM
+        if self._ws is not None and not self._ws.closed:
+            return
+        await self._close()
+        self._session = aiohttp.ClientSession(trust_env=True)
+        self._ws = await self._session.ws_connect(
+            f"{WSS_URL}&ConnectionId={c.connect_id()}&Sec-MS-GEC={DRM.generate_sec_ms_gec()}"
+            f"&Sec-MS-GEC-Version={SEC_MS_GEC_VERSION}",
+            compress=15, headers=DRM.headers_with_muid(WSS_HEADERS), ssl=c._SSL_CTX)
+        await self._ws.send_str(
+            f"X-Timestamp:{c.date_to_string()}\r\nContent-Type:application/json; charset=utf-8\r\n"
+            "Path:speech.config\r\n\r\n"
+            '{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false",'
+            '"wordBoundaryEnabled":"false"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}\r\n')
+
+    async def _close(self):
+        for conn in (self._ws, self._session):
+            if conn is not None:
+                try:
+                    await conn.close()
+                except Exception:  # noqa: BLE001
+                    pass
+        self._ws = self._session = None
+
+    async def _turn(self, text):
+        import aiohttp
+        from xml.sax.saxutils import escape
+
+        from edge_tts import communicate as c
+        from edge_tts.data_classes import TTSConfig
+        tc = TTSConfig(self.voice, self.rate, "+0%", "+0Hz", "SentenceBoundary")
+        await self._ws.send_str(c.ssml_headers_plus_data(
+            c.connect_id(), c.date_to_string(), c.mkssml(tc, escape(c.remove_incompatible_characters(text)))))
+        audio = bytearray()
+        async for msg in self._ws:
+            if msg.type == aiohttp.WSMsgType.TEXT and "Path:turn.end" in msg.data:
+                return bytes(audio)
+            if msg.type == aiohttp.WSMsgType.BINARY:
+                audio += msg.data[int.from_bytes(msg.data[:2], "big") + 2:]
+        raise ConnectionError("connexion fermée par le service")
+
+    async def _fetch_open(self, text):
+        import asyncio
+        if self._alock is None:
+            self._alock = asyncio.Lock()
+        async with self._alock:
+            for attempt in (1, 2):              # connexion fermée pendant l'inactivité : on en rouvre une
+                try:
+                    await self._connect()
+                    return await self._turn(text)
+                except Exception:  # noqa: BLE001
+                    await self._close()
+                    if attempt == 2:
+                        raise
+
+    def warm(self):
+        """Ouvre la connexion à l'avance (appui sur le PTT) : la 1re phrase de la réponse arrive ~0,5 s plus tôt."""
+        if not self.split:
+            threading.Thread(target=self._warm, daemon=True).start()
+
+    def _warm(self):
+        async def go():
+            import asyncio
+            if self._alock is None:
+                self._alock = asyncio.Lock()
+            async with self._alock:
+                await self._connect()
+        try:
+            self._run(go())
+        except Exception as e:  # noqa: BLE001
+            print(f"[voix] préouverture impossible : {e}", flush=True)
 
     async def _fetch(self, text):
         import edge_tts
@@ -403,7 +495,13 @@ class EdgeTTS:
         async def fetch_all():
             return await asyncio.gather(*(self._fetch(t) for t, _ in parts))
 
-        mp3s = asyncio.run(asyncio.wait_for(fetch_all(), timeout=12))
+        mp3s = None
+        if len(parts) == 1:
+            try:
+                mp3s = [self._run(self._fetch_open(parts[0][0]))]
+            except Exception as e:  # noqa: BLE001
+                print(f"[voix] connexion gardée indisponible ({e}) → connexion à chaque phrase", flush=True)
+        mp3s = mp3s or asyncio.run(asyncio.wait_for(fetch_all(), timeout=12))
         if len(parts) == 1:
             return (self._decode(mp3s[0]), self.SR) if mp3s[0] else (None, 0)
         gap = np.zeros(int(self.SR * 0.07), dtype=np.int16)
@@ -481,6 +579,9 @@ class FallbackTTS:
         if self.fallback is None:
             self.fallback = self.make_fallback()
         return self.fallback.synth(text)
+
+    def warm(self):
+        getattr(self.primary, "warm", lambda: None)()
 
 
 def _local_tts(cfg, log):

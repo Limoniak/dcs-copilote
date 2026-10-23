@@ -654,6 +654,7 @@ class App:
         self.recording = True
         self.recorder.start()
         self.overlay.set_status("Écoute…", state="listen")
+        getattr(self.speaker.tts, "warm", lambda: None)()    # voix en ligne prête quand la réponse arrive
 
     def on_release(self):
         if not self.recording:

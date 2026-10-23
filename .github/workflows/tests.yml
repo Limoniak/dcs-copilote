@@ -23,7 +23,7 @@ jobs:
 
       # seulement ce que les tests importent : pas de Whisper, voix ni manuels à télécharger
       - name: Dépendances
-        run: pip install numpy requests PySide6-Essentials pytest lupa
+        run: pip install numpy requests PySide6-Essentials pytest lupa edge-tts miniaudio
 
       - name: Tests
         run: python -m pytest tests -q
