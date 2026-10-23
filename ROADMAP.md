@@ -43,7 +43,7 @@ L'overlay est invisible en VR et en plein écran exclusif : il ne reste que la v
 
 ## 6. Installeur Windows
 - [x] `.exe` sans installation de Python (PyInstaller), fabriqué et publié par GitHub Actions à chaque tag `v*`
-- [x] Mise à jour depuis l'appli (vérifier la dernière Release et proposer de la télécharger)
+- [x] Installeur et mises à jour automatiques avec Velopack (Setup.exe, mise à jour en un clic, mises à jour différentielles)
 
 ## 7. Tests automatiques
 - [x] Tests (pytest) dans le dépôt : client IA (secours), prompts, découpage des phrases, manuels,

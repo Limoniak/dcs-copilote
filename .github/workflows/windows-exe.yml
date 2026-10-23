@@ -1,6 +1,8 @@
-# Fabrique DCS-Copilote pour Windows (.exe, sans Python à installer).
-# - Pousser un tag « v1.2.3 » : construit, vérifie et publie le .zip dans les Releases du dépôt.
-# - Onglet Actions → « Windows .exe » → Run workflow : construit le .zip (téléchargeable dans le run).
+# Fabrique DCS Copilote pour Windows : installeur Velopack (Setup.exe, mises à jour automatiques) et version
+# portable (.zip), sans Python à installer.
+# - Pousser un tag « v1.2.3 » : construit, vérifie, empaquette et publie la Release (que l'appli installée
+#   détecte pour se mettre à jour).
+# - Onglet Actions → « Windows .exe » → Run workflow : construit le tout (téléchargeable dans le run).
 name: Windows .exe
 
 on:
@@ -13,6 +15,7 @@ permissions:
 
 env:
   PYTHONUTF8: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
 
 jobs:
   build:
@@ -48,11 +51,6 @@ jobs:
       - name: Voix livrée avec l'appli
         run: Copy-Item -Recurse voices dist/DCS-Copilote/voices
 
-      # l'appli compare ce numéro à la dernière Release pour proposer les mises à jour
-      - name: Numéro de version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: Set-Content -Path dist/DCS-Copilote/version.txt -Value $env:GITHUB_REF_NAME -Encoding utf8
-
       - name: Vérification (--selftest)
         working-directory: dist/DCS-Copilote
         run: |
@@ -61,20 +59,38 @@ jobs:
           Remove-Item selftest.log
           if ($p.ExitCode -ne 0) { exit 1 }
 
-      - name: Archive
+      # Velopack : même version que la bibliothèque velopack de requirements.txt
+      - name: Outil Velopack (vpk)
         run: |
-          $name = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "dev-$($env:GITHUB_SHA.Substring(0,7))" }
-          Compress-Archive -Path dist/DCS-Copilote -DestinationPath "DCS-Copilote-$name-windows.zip"
+          dotnet tool install -g vpk --version 1.2.161
+          "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
+
+      - name: Numéro de version
+        id: version
+        run: |
+          $v = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME.TrimStart("v") } else { "0.0.0-dev.$env:GITHUB_RUN_NUMBER" }
+          "number=$v" >> $env:GITHUB_OUTPUT
+
+      # version précédente : pour fabriquer une mise à jour différentielle (petit téléchargement)
+      - name: Version précédente
+        if: startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true      # première version Velopack : rien à télécharger
+        run: vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Paquet Velopack
+        run: >
+          vpk pack --packId DCSCopilote --packVersion ${{ steps.version.outputs.number }}
+          --packDir dist/DCS-Copilote --mainExe DCS-Copilote.exe
+          --packTitle "DCS Copilote" --packAuthors Limoniak --icon build/icon.ico
 
       - uses: actions/upload-artifact@v7
         with:
           name: DCS-Copilote-windows
-          path: DCS-Copilote-*-windows.zip
+          path: Releases/*
           retention-days: 14
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v3
-        with:
-          files: DCS-Copilote-*-windows.zip
-          generate_release_notes: true
+        run: >
+          vpk upload github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
+          --publish --merge --releaseName ${{ github.ref_name }} --tag ${{ github.ref_name }}

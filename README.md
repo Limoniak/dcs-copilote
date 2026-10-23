@@ -15,15 +15,17 @@ Ton copilote vocal pour DCS World (Windows / Linux) : il te parle comme un équi
 - **Question tapée** dans l'overlay = mode *sol* : réponse détaillée, non lue (sauf `speak_typed`).
 - Contexte conservé sur 6 échanges (« et ensuite ? » fonctionne), remis à zéro au changement d'appareil ou avec ↺.
 
-## Version Windows (.exe)
+## Version Windows (installeur)
 
-Pas besoin d'installer Python : télécharge `DCS-Copilote-vX.Y.Z-windows.zip` dans les **Releases** du dépôt, décompresse-le dans un dossier où tu peux écrire (par exemple `Documents\DCS-Copilote`, pas `Program Files`), puis lance `DCS-Copilote.exe`. La config, le journal, les manuels et les modèles téléchargés sont rangés à côté de l'exécutable. Quand une nouvelle version sort, l'appli le signale au démarrage : décompresse le nouveau .zip par-dessus, tes réglages sont conservés.
+Pas besoin d'installer Python : télécharge **`DCSCopilote-win-Setup.exe`** dans les **Releases** du dépôt et lance-le. L'appli s'installe pour ton compte (sans droits administrateur), avec un raccourci sur le bureau et dans le menu Démarrer. Quand une nouvelle version sort, l'appli te propose de l'installer au démarrage : un clic, elle se met à jour et redémarre. Version sans installation : `DCSCopilote-win-Portable.zip`.
 
-Fabrication automatique par GitHub Actions (`.github/workflows/windows-exe.yml`) :
-- **publier une version** : `git tag v1.0.0 && git push origin v1.0.0` → construit, vérifie (`--selftest`) et publie le .zip dans les Releases ;
-- **construction d'essai** : onglet *Actions* → *Windows .exe* → *Run workflow* → le .zip est téléchargeable dans le résultat (14 jours).
+Tes fichiers (config, clés API, journal, historique, manuels indexés, modèles téléchargés) sont rangés dans `%LOCALAPPDATA%\DCS-Copilote` et survivent aux mises à jour. Les anciennes versions en .zip qui ont déjà leur `config.json` à côté de l'exe continuent de l'utiliser là.
 
-Fabrication à la main sous Windows : `pip install -r requirements.txt pyinstaller`, `python build/make_icon.py`, `pyinstaller --noconfirm build/dcs-copilote.spec` → `dist/DCS-Copilote/`.
+Fabrication automatique par GitHub Actions (`.github/workflows/windows-exe.yml`), avec [Velopack](https://velopack.io) :
+- **publier une version** : `git tag v1.2.3 && git push origin v1.2.3` → construit (PyInstaller), vérifie (`--selftest`), empaquette (`vpk pack`) et publie l'installeur, le .zip portable et les fichiers de mise à jour dans la Release ;
+- **construction d'essai** : onglet *Actions* → *Windows .exe* → *Run workflow* → le tout est téléchargeable dans le résultat (14 jours).
+
+Fabrication à la main sous Windows : `pip install -r requirements.txt pyinstaller`, `python build/make_icon.py`, `pyinstaller --noconfirm build/dcs-copilote.spec` → `dist/DCS-Copilote/` ; puis, avec l'outil .NET `vpk` (`dotnet tool install -g vpk`) : `vpk pack --packId DCSCopilote --packVersion 1.2.3 --packDir dist/DCS-Copilote --mainExe DCS-Copilote.exe`.
 
 Tests : `python -m pytest tests` (logique et interface sans écran, sans micro ni DCS) ; lancés aussi par GitHub Actions à chaque push.
 

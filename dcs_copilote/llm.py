@@ -354,6 +354,12 @@ class LLMClient:
         return r
 
     def _read(self, r):
+        try:
+            yield from self._lines(r)
+        except requests.RequestException as e:      # Wi-Fi / 4G coupé pendant la réponse
+            raise LLMError(f"Connexion à {self.name} coupée pendant la réponse. Réessaie.") from e
+
+    def _lines(self, r):
         think = ThinkFilter()
         with r:
             for raw in r.iter_lines():

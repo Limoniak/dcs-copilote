@@ -16,7 +16,7 @@ from .textutil import SentenceSplitter
 
 MIN_AUDIO_S = 0.35
 DCS_SCRIPT_VERSION = 2          # champ « v » envoyé par dcs/DCSAssistant.lua
-RELEASES_API = "https://api.github.com/repos/Limoniak/dcs-copilote/releases/latest"
+REPO_URL = "https://github.com/Limoniak/dcs-copilote"
 HISTORY_DIR = os.path.join("data", "historique")
 
 
@@ -122,9 +122,7 @@ class App:
             return
         pcfg.update(changes)
         try:
-            disk = cfgmod.load(self.cfg_path)
-            disk["llm"]["providers"].setdefault(prov, {}).update(changes)
-            cfgmod.save(self.cfg_path, disk)
+            cfgmod.update(self.cfg_path, lambda d: d["llm"]["providers"].setdefault(prov, {}).update(changes))
         except (OSError, ValueError) as e:
             print(f"[IA] réglage non enregistré : {e}", flush=True)
             return
@@ -186,9 +184,7 @@ class App:
         """Bouton haut-parleur de l'overlay : lecture des réponses aux questions tapées."""
         self.cfg["tts"]["speak_typed"] = on
         try:
-            disk = cfgmod.load(self.cfg_path)
-            disk["tts"]["speak_typed"] = on
-            cfgmod.save(self.cfg_path, disk)
+            cfgmod.update(self.cfg_path, lambda d: d["tts"].update(speak_typed=on))
         except (OSError, ValueError) as e:
             self.log(f"Réglage non enregistré : {e}", error=True)
         if not on:
@@ -217,6 +213,10 @@ class App:
     def apply_settings(self, new):
         """Enregistre la nouvelle config et l'applique sans redémarrer."""
         old, self.cfg = self.cfg, copy.deepcopy(new)
+        # trouvés en arrière-plan pendant que la fenêtre était ouverte : un champ resté vide ne les efface pas
+        for sec, key in (("manuals", "dcs_dir"), ("dcs", "saved_games")):
+            if not self.cfg[sec].get(key) and old[sec].get(key):
+                self.cfg[sec][key] = old[sec][key]
         x, y = self.overlay.position()
         self.cfg["overlay"]["x"], self.cfg["overlay"]["y"] = x, y
         cfgmod.save(self.cfg_path, self.cfg)
@@ -339,27 +339,28 @@ class App:
                                   "mission, vérifie le dossier dans ⚙ Réglages → DCS et réinstalle le script.")
 
     def _check_update(self):
-        """Version .exe : signale une Release GitHub plus récente et propose d'ouvrir sa page."""
+        """Appli installée (Velopack) : nouvelle version sur GitHub → proposer de l'installer et redémarrer."""
         try:
-            with open("version.txt", encoding="utf-8-sig") as f:    # écrit par la fabrication du .exe
-                cur = f.read().strip()
-        except OSError:
-            return                                              # lancé depuis les sources : git pull
-        import requests
-        try:
-            r = requests.get(RELEASES_API, timeout=10)
-            r.raise_for_status()
-            rel = r.json()
-        except (requests.RequestException, ValueError) as e:
-            print(f"[mise à jour] vérification impossible : {e}", flush=True)
+            import velopack
+            um = velopack.UpdateManager(velopack.GithubSource(REPO_URL))
+            info = um.check_for_updates()
+        except Exception as e:  # noqa: BLE001  (lancé depuis les sources : pas installé ; ou hors ligne)
+            print(f"[mise à jour] {e}", flush=True)
             return
-        tag = rel.get("tag_name", "")
-        if _version(tag) > _version(cur):
-            import webbrowser
-            self._ask(f"Nouvelle version {tag} disponible (tu as {cur}).\n\nTélécharge le .zip, puis "
-                      "décompresse-le par-dessus ce dossier : tes réglages et tes manuels sont conservés.",
-                      lambda: webbrowser.open(rel.get("html_url") or RELEASES_API), yes="Télécharger",
-                      no="Plus tard")
+        if not info:
+            return
+        new = info.TargetFullRelease.Version
+
+        def install():
+            self.overlay.info(f"Téléchargement de la version {new}…")
+            try:
+                um.download_updates(info)
+                um.apply_updates_and_restart(info)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"Mise à jour impossible : {e}", error=True)
+        self._ask(f"Nouvelle version {new} disponible (tu as {um.get_current_version()}).\n\nL'installer maintenant ? "
+                  "L'appli redémarre ; tes réglages, ton historique et tes manuels sont conservés.",
+                  install, yes="Installer", no="Plus tard")
 
     # ------------------------------------------------------------------ utilitaires
     def log(self, msg, error=False):
@@ -434,12 +435,12 @@ class App:
     def _save_setting(self, path, value):
         """Enregistre une seule valeur dans config.json (sans écraser le reste)."""
         try:
-            disk = cfgmod.load(self.cfg_path)
-            node = disk
-            for k in path[:-1]:
-                node = node.setdefault(k, {})
-            node[path[-1]] = value
-            cfgmod.save(self.cfg_path, disk)
+            def change(disk):
+                node = disk
+                for k in path[:-1]:
+                    node = node.setdefault(k, {})
+                node[path[-1]] = value
+            cfgmod.update(self.cfg_path, change)
         except (OSError, ValueError) as e:
             print(f"[réglages] {e}", flush=True)
 
@@ -539,7 +540,8 @@ class App:
             return "", ""
         query = question
         if len(question.split()) < 6:
-            prev = [m["content"] for m in self.history if m["role"] == "user"]
+            # list() copie d'un bloc : l'historique peut être vidé par un autre thread (changement d'appareil)
+            prev = [m["content"] for m in list(self.history) if m["role"] == "user"]
             if prev:
                 query = prev[-1] + " " + question
         try:
@@ -646,9 +648,8 @@ class App:
     def quit(self):
         try:
             # relit le fichier : les surcharges --provider/--model ne sont pas enregistrées
-            disk = cfgmod.load(self.cfg_path)
-            disk["overlay"]["x"], disk["overlay"]["y"] = self.overlay.position()
-            cfgmod.save(self.cfg_path, disk)
+            x, y = self.overlay.position()
+            cfgmod.update(self.cfg_path, lambda d: d["overlay"].update(x=x, y=y))
         except Exception:  # noqa: BLE001
             pass
         self.overlay.close()
@@ -911,7 +912,3 @@ class App:
     def run(self):
         self.overlay.mainloop()
 
-
-def _version(tag):
-    """« v1.2.10 » → (1, 2, 10), pour comparer les versions."""
-    return tuple(int(n) for n in re.findall(r"\d+", tag))

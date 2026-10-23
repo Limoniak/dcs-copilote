@@ -2,6 +2,11 @@
 import copy
 import json
 import os
+import threading
+
+# plusieurs threads enregistrent des réglages (manuels, script DCS, interface) : sans verrou, deux écritures du
+# même fichier temporaire pouvaient se mélanger et rendre config.json illisible (clés API comprises)
+LOCK = threading.RLock()
 
 DEFAULTS = {
     "llm": {
@@ -154,7 +159,16 @@ def load(path):
 
 
 def save(path, cfg):
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, path)
+    with LOCK:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, path)
+
+
+def update(path, change):
+    """Relit config.json, applique change(données) et réenregistre, sans qu'un autre thread s'intercale."""
+    with LOCK:
+        data = load(path)
+        change(data)
+        save(path, data)

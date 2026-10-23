@@ -4,7 +4,6 @@ import types
 
 from dcs_copilote import checklist as cl
 from dcs_copilote import config, dcs_install, llm
-from dcs_copilote.app import _version
 from dcs_copilote.manuals import TOC, english_queries, keep_languages, key_phrases
 from dcs_copilote.prompts import system_prompt
 from dcs_copilote.textutil import SentenceSplitter
@@ -106,16 +105,52 @@ def test_ancien_vert_de_l_overlay_migre(tmp_path):
     assert config.load(str(p))["overlay"]["accent"] == "#ff0000"
 
 
+def test_enregistrements_simultanes_sans_perte_ni_corruption(tmp_path):
+    import json
+    import threading
+    path = str(tmp_path / "config.json")
+    config.save(path, config.load(path))
+    keys = [f"k{i}" for i in range(20)]
+    threads = [threading.Thread(target=config.update, args=(path, lambda d, k=k: d["dcs"].update({k: k})))
+               for k in keys]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    with open(path, encoding="utf-8") as f:
+        assert set(keys) <= set(json.load(f)["dcs"])    # fichier lisible, aucune modification perdue
+
+
+def test_coupure_reseau_pendant_la_reponse_devient_une_erreur_claire():
+    import requests
+
+    class CutResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def iter_lines(self):
+            yield b'data: {"choices":[{"delta":{"content":"Train "}}]}'
+            raise requests.exceptions.ChunkedEncodingError("connexion perdue")
+
+    client = llm.LLMClient({"provider": "groq", "providers": {"groq": {"base_url": "http://x", "api_key": "k",
+                                                                       "model": "m"}}})
+    got = []
+    try:
+        for part in client._read(CutResponse()):
+            got.append(part)
+        raise AssertionError("aucune erreur levée")
+    except llm.LLMError as e:
+        assert got == ["Train "] and "coupée" in str(e)
+
+
 def test_statut_du_script_dcs(tmp_path):
     assert dcs_install.status(str(tmp_path), 7779) == "missing"
     dcs_install.install(str(tmp_path), 7779)
     assert dcs_install.status(str(tmp_path), 7779) == "ok"
     assert dcs_install.status(str(tmp_path), 7780) == "outdated"
-
-
-def test_comparaison_des_versions():
-    assert _version("v1.10.0") > _version("v1.9.3") > _version("v1.0.0")
-    assert not _version("v1.0.4") > _version("v1.0.4")
 
 
 def test_historique_markdown(tmp_path, monkeypatch):

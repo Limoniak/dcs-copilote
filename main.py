@@ -15,17 +15,38 @@ import argparse
 import os
 import sys
 
-# Version empaquetée (.exe PyInstaller) : les fichiers de l'utilisateur (config, journal, manuels,
-# voix) vont à côté de l'exécutable ; sinon à côté de ce script.
 # Console Windows en cp1252 : un accent ou un symbole (⚙) faisait planter print(). Sortie en UTF-8.
 for _stream in (sys.stdout, sys.stderr):
     if _stream is not None and hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 FROZEN = getattr(sys, "frozen", False)
-HERE = os.path.dirname(sys.executable if FROZEN else os.path.abspath(__file__))
+if FROZEN:
+    # installation, mise à jour, désinstallation : Velopack lance l'appli avec ses arguments et attend ce hook
+    import velopack
+    velopack.App().run()
+APP_DIR = os.path.dirname(sys.executable if FROZEN else os.path.abspath(__file__))
+
+
+def data_dir():
+    """Fichiers de l'utilisateur (config, journal, manuels, modèles, voix). Appli installée : dans
+    %LOCALAPPDATA%\\DCS-Copilote, car Velopack remplace le dossier de l'appli à chaque mise à jour. Sources, ou
+    ancien .zip portable qui a déjà son config.json à côté de l'exe : à côté de l'appli, comme avant."""
+    if not FROZEN or os.path.exists(os.path.join(APP_DIR, "config.json")):
+        return APP_DIR
+    d = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "DCS-Copilote")
+    shipped = os.path.join(APP_DIR, "voices")              # voix livrée avec l'appli, copiée une fois
+    os.makedirs(os.path.join(d, "voices"), exist_ok=True)
+    for f in os.listdir(shipped) if os.path.isdir(shipped) else []:
+        if not os.path.exists(os.path.join(d, "voices", f)):
+            import shutil
+            shutil.copy2(os.path.join(shipped, f), os.path.join(d, "voices", f))
+    return d
+
+
+HERE = data_dir()
 os.chdir(HERE)
-sys.path.insert(0, HERE)
+sys.path.insert(0, APP_DIR)
 
 from dcs_copilote import config as cfgmod  # noqa: E402
 
@@ -162,7 +183,7 @@ def cmd_selftest():
         check(name, fn)
     lines = [f"{'OK ' if ok else 'ÉCHEC'} {name:12} {detail}" for ok, name, detail in checks]
     print("\n".join(lines), flush=True)
-    with open("selftest.log", "w", encoding="utf-8") as f:    # le .exe fenêtré n'a pas de console
+    with open(os.path.join(APP_DIR, "selftest.log"), "w", encoding="utf-8") as f:   # le .exe fenêtré n'a pas de console
         f.write("\n".join(lines) + "\n")
     return 0 if all(ok for ok, _n, _d in checks) else 1
 
@@ -190,7 +211,14 @@ def main():
         return cmd_selftest()
 
     first_run = not os.path.exists(CFG_PATH)
-    cfg = cfgmod.load(CFG_PATH)
+    broken = None
+    try:
+        cfg = cfgmod.load(CFG_PATH)
+    except ValueError as e:              # config.json modifié à la main et mal formé : l'appli démarre quand même
+        broken = CFG_PATH + ".illisible"
+        os.replace(CFG_PATH, broken)
+        print(f"config.json illisible ({e}) : mis de côté sous {broken}, réglages par défaut", flush=True)
+        cfg = cfgmod.load(CFG_PATH)
     if first_run:
         cfgmod.save(CFG_PATH, cfg)
         print("config.json créé avec les valeurs par défaut — réglages : bouton ⚙ de l'overlay.")
@@ -222,7 +250,11 @@ def main():
         QMessageBox.information(None, "DCS Copilote", "DCS Copilote est déjà lancé.")
         return 0
     from dcs_copilote.app import App
-    App(cfg, CFG_PATH, first_run).run()
+    app = App(cfg, CFG_PATH, first_run)
+    if broken:
+        app.overlay.info(f"config.json était illisible : réglages par défaut. L'ancien fichier est gardé sous "
+                         f"{os.path.basename(broken)} (tes clés API y sont, à recopier dans ⚙ Réglages).")
+    app.run()
     del qapp, lock
     return 0
 

@@ -11,3 +11,4 @@ edge-tts>=6.1
 miniaudio>=1.59
 fastembed>=0.4
 pymupdf>=1.24
+velopack>=1.2

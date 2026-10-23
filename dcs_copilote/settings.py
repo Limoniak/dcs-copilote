@@ -935,7 +935,13 @@ class SettingsWindow(QWidget):
             self.call(f)
 
         def work():
-            s = build_index(pdfs, progress, lambda: self._stop_index)
+            # même verrou que l'indexation en arrière-plan : deux écritures de l'index le rendraient incohérent
+            if not self.app._chucks_lock.acquire(blocking=False):
+                raise RuntimeError("une indexation est déjà en cours en arrière-plan, réessaie dans quelques minutes")
+            try:
+                s = build_index(pdfs, progress, lambda: self._stop_index)
+            finally:
+                self.app._chucks_lock.release()
             self.app.load_manuals()
             return s
 
