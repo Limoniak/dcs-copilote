@@ -491,9 +491,15 @@ class App:
         m = (cfg or self.cfg)["manuals"]
         ch = m.get("chucks", {})
         slugs = list(ch.get("aircraft", []))
-        if ch.get("follow_installed", True) and m.get("dcs_dir"):
+        if not ch.get("follow_installed", True):
+            return slugs
+        if m.get("dcs_dir") and os.path.isdir(os.path.join(m["dcs_dir"], "Mods", "aircraft")):
             guides = chucks.load_state()["guides"] or chucks.list_guides()
             slugs += [s for s in chucks.installed_slugs(guides, m["dcs_dir"]) if s not in slugs]
+        else:
+            # DCS introuvable (disque débranché, déplacé) : ses modules sembleraient désinstallés et la mise à jour
+            # effacerait leurs guides ; on garde ceux déjà téléchargés
+            slugs += [s for s in chucks.load_state()["files"] if s not in slugs]
         return slugs
 
     def _chucks_loop(self):

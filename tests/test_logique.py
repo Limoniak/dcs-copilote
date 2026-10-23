@@ -231,6 +231,17 @@ def test_alertes_selon_les_limites_de_l_appareil():
     assert fly("A-10C_2", 230, gear=0.0, flaps=0.5) == ["Volets sortis à 230 nœuds, réduis !"]
 
 
+def test_guides_gardes_si_dcs_introuvable(tmp_path, monkeypatch):
+    from dcs_copilote import app, chucks
+    monkeypatch.setattr(chucks, "load_state", lambda: {"guides": GUIDES, "files": {"fa-18c": {}, "m-2000c": {}}})
+    cfg = {"manuals": {"dcs_dir": str(tmp_path / "disque-debranche"), "chucks": {"aircraft": ["f-16cm"]}}}
+    fake = types.SimpleNamespace(cfg=cfg)
+    assert app.App.chucks_selection(fake) == ["f-16cm", "fa-18c", "m-2000c"]   # rien à effacer
+    (tmp_path / "dcs" / "Mods" / "aircraft" / "FA-18C").mkdir(parents=True)
+    cfg["manuals"]["dcs_dir"] = str(tmp_path / "dcs")
+    assert app.App.chucks_selection(fake) == ["f-16cm", "fa-18c"]              # DCS là : le Mirage n'y est plus
+
+
 # ------------------------------------------------------------------ voix, checklist
 def test_decoupage_des_phrases_pour_la_voix():
     s = SentenceSplitter()
