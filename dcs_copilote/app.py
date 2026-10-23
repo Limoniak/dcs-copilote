@@ -82,7 +82,10 @@ class App:
         self._fetching = set()
         threading.Thread(target=self._startup_manuals, daemon=True).start()
         threading.Thread(target=self._chucks_loop, daemon=True).start()
-        threading.Thread(target=self._load_stt, daemon=True).start()
+        if self.stt_api is None:               # en ligne : Whisper local chargé seulement s'il doit servir
+            threading.Thread(target=self._load_stt, daemon=True).start()
+        else:
+            self._ready()
         threading.Thread(target=self._worker, daemon=True).start()
         threading.Thread(target=self._dcs_watch, args=(first_run,), daemon=True).start()
         threading.Thread(target=self._check_update, daemon=True).start()
@@ -257,8 +260,10 @@ class App:
         if cfg["stt"] != old["stt"] or cfg["llm"] != old["llm"]:
             self._make_stt_api()
         if any(cfg["stt"].get(k) != old["stt"].get(k) for k in local):
+            self.stt = None                    # rechargé au besoin, avec les nouveaux réglages
+        if self.stt_api is None and self.stt is None:
             self._load_stt()
-        elif self.stt is not None:
+        else:
             self._ready()
 
     # ------------------------------------------------------------------ script DCS, mises à jour
@@ -570,7 +575,11 @@ class App:
             except Exception as e:  # noqa: BLE001
                 print(f"[STT en ligne] échec ({e}) → Whisper local", flush=True)
         if self.stt is None:
-            raise RuntimeError("Whisper pas encore prêt…")
+            # chargé à la demande quand la reconnaissance en ligne est active : des centaines de Mo de mémoire
+            # laissés à DCS tant que le secours ne sert pas (premier secours : quelques secondes de chargement)
+            self._load_stt()
+        if self.stt is None:
+            raise RuntimeError("Whisper indisponible")
         return self.stt.transcribe(audio, self.current_aircraft()), "local"
 
     def _on_voice_start(self, gen):

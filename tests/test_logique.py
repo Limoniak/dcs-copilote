@@ -74,6 +74,21 @@ def test_suivi_de_consommation_et_alerte_de_quota(tmp_path, monkeypatch):
     assert len(said) == 2 and "49 requêtes" in said[0] and "9 requêtes" in said[1]     # une fois à 50, une fois à 10
 
 
+def test_whisper_local_charge_seulement_en_secours():
+    from dcs_copilote import app
+
+    def down(audio, aircraft):
+        raise ConnectionError("Groq injoignable")
+    loads = []
+    fake = types.SimpleNamespace(stt=None, current_aircraft=lambda: None,
+                                 stt_api=types.SimpleNamespace(transcribe=down))
+    fake._load_stt = lambda: (loads.append(1), setattr(fake, "stt", types.SimpleNamespace(
+        transcribe=lambda audio, aircraft: "train sorti")))
+    assert app.App._transcribe(fake, b"") == ("train sorti", "local") and loads == [1]
+    app.App._transcribe(fake, b"")
+    assert loads == [1]                               # chargé une seule fois
+
+
 def test_indicatif_place_par_l_appli():
     on = system_prompt("F/A-18C Hornet", None, "vol", callsign="Viper 1", address=True)
     off = system_prompt("F/A-18C Hornet", None, "vol", callsign="Viper 1", address=False)
