@@ -144,7 +144,7 @@ class App:
             return
         except LLMError as e:
             backup = self.cfg["llm"].get("fallback_provider")
-            if e.kind not in ("quota", "overload", "model") or not backup or backup == self.cfg["llm"]["provider"]:
+            if e.kind not in ("quota", "overload", "model", "timeout") or not backup or backup == self.cfg["llm"]["provider"]:
                 raise
             first = e
         try:

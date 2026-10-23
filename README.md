@@ -19,7 +19,7 @@ Ton copilote vocal pour DCS World (Windows / Linux) : il te parle comme un équi
 
 Pas besoin d'installer Python : télécharge **`DCSCopilote-win-Setup.exe`** dans les **Releases** du dépôt et lance-le. L'appli s'installe pour ton compte (sans droits administrateur), avec un raccourci sur le bureau et dans le menu Démarrer. Quand une nouvelle version sort, l'appli te propose de l'installer au démarrage : un clic, elle se met à jour et redémarre. Version sans installation : `DCSCopilote-win-Portable.zip`.
 
-Tes fichiers (config, clés API, journal, historique, manuels indexés, modèles téléchargés) sont rangés dans `%LOCALAPPDATA%\DCS-Copilote` et survivent aux mises à jour. Les anciennes versions en .zip qui ont déjà leur `config.json` à côté de l'exe continuent de l'utiliser là.
+Tes fichiers (config, clés API, journal, historique, manuels indexés, modèles téléchargés) sont rangés dans `%LOCALAPPDATA%\DCS-Copilote` et survivent aux mises à jour. Les anciennes versions en .zip qui ont déjà leur `config.json` à côté de l'exe continuent de l'utiliser là. Tu passes d'un ancien .zip à l'installeur ? Au premier lancement, « J'avais déjà DCS Copilote : importer mes réglages » reprend ton ancien `config.json` (clés, indicatif, bouton PTT…).
 
 Fabrication automatique par GitHub Actions (`.github/workflows/windows-exe.yml`), avec [Velopack](https://velopack.io) :
 - **publier une version** : `git tag v1.2.3 && git push origin v1.2.3` → construit (PyInstaller), vérifie (`--selftest`), empaquette (`vpk pack`) et publie l'installeur, le .zip portable et les fichiers de mise à jour dans la Release ;

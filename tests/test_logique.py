@@ -88,6 +88,33 @@ def test_whisper_local_charge_seulement_en_secours():
     assert loads == [1]                               # chargé une seule fois
 
 
+def test_modele_muet_passe_au_secours(monkeypatch):
+    import requests
+    calls, waits = [], []
+
+    def fake_post(url, json, headers, stream, timeout):
+        calls.append(json["model"])
+        waits.append(timeout[1])
+        if json["model"] == "muet":
+            raise requests.exceptions.ReadTimeout("rien depuis 45 s")
+        return types.SimpleNamespace(status_code=200, text="", headers={}, close=lambda: None)
+
+    monkeypatch.setattr(llm.requests, "post", fake_post)
+    monkeypatch.setattr(llm.LLMClient, "_read", lambda self, r: iter(["ok"]))
+    monkeypatch.setattr(llm, "_exhausted", {})
+    client = llm.LLMClient({"provider": "groq", "timeout": 120, "providers": {"groq": {
+        "base_url": "http://x", "api_key": "k", "model": "muet", "fallback_model": "secours"}}})
+    assert "".join(client.stream([], fast=True)) == "ok"
+    assert calls[0] == "muet" and calls[-1] == "secours" and set(waits) == {45}   # en vol : 45 s, pas 120
+    client2 = llm.LLMClient({"provider": "groq", "timeout": 120, "providers": {"groq": {
+        "base_url": "http://x", "api_key": "k", "model": "muet"}}})
+    try:
+        "".join(client2.stream([]))
+        raise AssertionError("aucune erreur levée")
+    except llm.LLMError as e:
+        assert e.kind == "timeout" and waits[-1] == 120        # sans secours : erreur claire, délai des réglages
+
+
 def test_indicatif_place_par_l_appli():
     on = system_prompt("F/A-18C Hornet", None, "vol", callsign="Viper 1", address=True)
     off = system_prompt("F/A-18C Hornet", None, "vol", callsign="Viper 1", address=False)

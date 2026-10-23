@@ -124,6 +124,11 @@ class Wizard(QWidget):
         card.lay.addLayout(trow)
         self.llm_result = card.add_widget(_result())
         lay.addWidget(card)
+        imp = QPushButton("J'avais déjà DCS Copilote : importer mes réglages…")
+        imp.setObjectName("ghost")
+        imp.setToolTip("Choisis le config.json de l'ancienne version (dossier de l'ancien .zip, à côté de l'exe)")
+        imp.clicked.connect(self._import)
+        lay.addWidget(imp, 0, Qt.AlignLeft)
         lay.addStretch(1)
         self.provider = None
         self.cb_prov.currentTextChanged.connect(self._provider_changed)
@@ -281,6 +286,23 @@ class Wizard(QWidget):
         _show(self.dcs_result, "✓ " + "\n".join(msgs), "ok")
 
     # ------------------------------------------------------------------ fin
+    def _import(self):
+        """Réglages d'une ancienne version (.zip) : clés, indicatif, bouton PTT, voix… repris tels quels."""
+        from PySide6.QtWidgets import QFileDialog
+
+        from . import config as cfgmod
+        path, _ = QFileDialog.getOpenFileName(self, "config.json de l'ancienne version", "", "config.json (config.json)")
+        if not path:
+            return
+        try:
+            old = cfgmod.load(path)
+            self.app.apply_settings(old)
+        except (OSError, ValueError) as e:
+            _show(self.llm_result, f"Import impossible : {e}", "err")
+            return
+        self.app.overlay.info("Réglages de l'ancienne version importés. Tout se change dans ⚙ Réglages.")
+        self.close()
+
     def _finish(self):
         self._llm_cfg()
         self._store_crew()

@@ -8,7 +8,7 @@ import requests
 
 
 class LLMError(Exception):
-    """kind : "quota" / "overload" (le secours peut prendre le relais), "auth", "other"."""
+    """kind : "quota" / "overload" / "timeout" (le secours peut prendre le relais), "auth", "other"."""
 
     def __init__(self, msg, kind="other"):
         super().__init__(msg)
@@ -274,7 +274,13 @@ class LLMClient:
             for attempt in range(len(RETRY_DELAYS) + 1):
                 if not alive():
                     return
-                r = self._request(model, messages, headers, fast)
+                try:
+                    r = self._request(model, messages, headers, fast)
+                except LLMError as e:
+                    if e.kind != "timeout" or i >= len(usable):
+                        raise
+                    err, kind = str(e), "overload"         # modèle muet : on passe au secours suivant
+                    break
                 if r.status_code == 200:
                     _count_request(prov, model, r.headers)
                     self.last_model = model
@@ -345,7 +351,7 @@ class LLMClient:
             payload.update(self.cfg.get("extra") or {})
             if r is not None:
                 r.close()
-            r = self._post(payload, headers)
+            r = self._post(payload, headers, fast)
             if r.status_code != 400:
                 if r.status_code == 200 and (fast or key not in _accepted) and _accepted.get(key) != (effort, with_temp):
                     _accepted[key] = (effort, with_temp)
@@ -389,13 +395,19 @@ class LLMClient:
         if tail:
             yield tail
 
-    def _post(self, payload, headers):
+    def _read_timeout(self, fast):
+        """Attente maximale entre deux morceaux de réponse : en vol (fast), au plus 45 s, pour que le secours
+        prenne vite le relais si le service se bloque ; sinon le « Délai maximum » des réglages."""
+        timeout = float(self.cfg.get("timeout", 120))
+        return min(timeout, 45) if fast else timeout
+
+    def _post(self, payload, headers, fast=False):
         try:
             return requests.post(self.url, json=payload, headers=headers, stream=True,
-                                 timeout=(10, self.cfg.get("timeout", 120)))
+                                 timeout=(10, self._read_timeout(fast)))
         except requests.Timeout as e:
             raise LLMError(f"{self.name} ne répond pas (délai dépassé). Réessaie, ou augmente le délai "
-                           f"dans ⚙ Réglages → IA.") from e
+                           f"dans ⚙ Réglages → IA.", "timeout") from e
         except requests.ConnectionError as e:
             hint = " Ollama est-il lancé ?" if self.cfg["provider"] == "ollama" else " Vérifie ta connexion Internet."
             raise LLMError(f"Impossible de joindre {self.name} ({self.base}).{hint}") from e

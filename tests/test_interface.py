@@ -55,6 +55,28 @@ def test_poignee_redimensionne_et_memorise():
     assert saved == [{"width": 660, "lines": 4}]
 
 
+def test_import_des_reglages_d_une_ancienne_version(tmp_path, monkeypatch):
+    import json
+    import types
+
+    from PySide6.QtWidgets import QFileDialog
+
+    from dcs_copilote.wizard import Wizard
+    old = tmp_path / "config.json"
+    old.write_text(json.dumps({"llm": {"callsign": "Viper 1", "providers": {"groq": {"api_key": "gsk_ancienne"}}},
+                               "ptt": {"type": "keyboard", "key": "$"}}), encoding="utf-8")
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: (str(old), ""))
+    saved, said = [], []
+    app = types.SimpleNamespace(cfg=config.load("absent.json"), apply_settings=saved.append, ptt=None,
+                                overlay=types.SimpleNamespace(_call=lambda fn: fn(), info=said.append))
+    w = Wizard(app)
+    w._import()
+    assert saved[0]["llm"]["providers"]["groq"]["api_key"] == "gsk_ancienne"
+    assert saved[0]["llm"]["callsign"] == "Viper 1" and saved[0]["ptt"]["key"] == "$"
+    assert saved[0]["tts"]["engine"] == "edge"            # le reste : valeurs par défaut
+    assert not w.alive() and "importés" in said[0]
+
+
 def test_classement_des_modeles():
     assert [model_kind(m) for m in ("whisper-large-v3", "gemini-2.5-flash", "o3", "gpt-4.1")] == \
         ["other", "fast", "slow", "general"]
