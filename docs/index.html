@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b111b">
+  <title>DCS Copilote — Your cockpit. Now with a copilot.</title>
+  <meta name="description" content="Meet your voice copilot for DCS World. Ask questions, follow checklists and learn your aircraft with context from your flight and your manuals. Windows and Linux.">
+  <meta property="og:title" content="DCS Copilote — Your cockpit. Now with a copilot.">
+  <meta property="og:description" content="Hands on the HOTAS. Answers in your headset. A voice companion for learning DCS World.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://limoniak.github.io/dcs-copilote/assets/aviation-artwork.webp">
+  <meta property="og:image:alt" content="Aviation artwork of a naval fighter above the clouds at sunset">
+  <meta property="og:url" content="https://limoniak.github.io/dcs-copilote/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://limoniak.github.io/dcs-copilote/">
+  <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/manrope.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/fonts/spacegrotesk.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/aviation-artwork.webp" as="image" fetchpriority="high">
+  <link rel="stylesheet" href="style.css">
+  <script src="demo.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header" id="top">
+    <div class="container header-inner">
+      <a class="brand" href="#top" aria-label="DCS Copilote home"><img src="assets/marque.svg" width="40" height="40" alt=""><span>DCS <strong>Copilote</strong></span></a>
+      <button class="menu-toggle" type="button" aria-controls="main-nav" aria-expanded="false" aria-label="Open navigation"><span></span><span></span></button>
+      <nav id="main-nav" aria-label="Main navigation">
+        <a href="#features">The copilot</a><a href="#screenshots">Inside the app</a><a href="#faq">FAQ</a>
+        <a class="nav-github" href="https://github.com/Limoniak/dcs-copilote"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 19c-4 1-4-2-6-2m12 5v-4a3.5 3.5 0 0 0-1-3c3 0 6-1.5 6-6a4.7 4.7 0 0 0-1.3-3.3A4.3 4.3 0 0 0 18.6 2S17.4 1.6 15 3.3a12 12 0 0 0-6 0C6.6 1.6 5.4 2 5.4 2a4.3 4.3 0 0 0-.1 3.7A4.7 4.7 0 0 0 4 9c0 4.5 3 6 6 6a3.5 3.5 0 0 0-1 3v4"/></svg> GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+      <a class="button button-small header-download" href="#download">Get the copilot <span aria-hidden="true">↓</span></a>
+    </div>
+  </header>
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <img class="hero-art" src="assets/aviation-artwork.webp" width="1983" height="793" alt="" fetchpriority="high">
+      <div class="hero-shade"></div>
+      <div class="container hero-layout">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="signal-dot"></span> YOUR VOICE COMPANION FOR DCS WORLD</p>
+          <h1 id="hero-title">Your cockpit.<br>Now with<br><span>a copilot.</span></h1>
+          <p class="hero-intro">Hands on the HOTAS. Eyes on the horizon.<br>Ask, learn, and work through your checklists with an extra voice in the cockpit.</p>
+          <div class="hero-buttons">
+            <a class="button" href="https://github.com/Limoniak/dcs-copilote/releases/latest"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg> Download for Windows</a>
+            <a class="button button-outline" href="#screenshots">Take a look inside <span aria-hidden="true">↗</span></a>
+          </div>
+          <p class="hero-note">No Python needed on Windows. <a href="#download">Linux & source installation ↗</a></p>
+        </div>
+        <figure class="hero-product">
+          <div class="product-label"><span class="signal-dot"></span> THE COPILOT, AT A GLANCE <span>01 / 04</span></div>
+          <button class="image-zoom" type="button" data-zoom="assets/screenshots/overlay.png" data-caption="The actual overlay with sample content. The app currently uses a French interface." aria-label="Enlarge the in-flight overlay screenshot">
+            <img src="assets/screenshots/overlay.png" alt="DCS Copilote overlay showing a sample conversation, selected Hornet aircraft, microphone control and ready status" width="1576" height="612"><span class="zoom-label" aria-hidden="true">↗</span>
+          </button>
+          <figcaption>Actual app. Sample conversation. French interface.</figcaption>
+        </figure>
+      </div>
+      <div class="container hero-bottom"><a href="#features">MEET YOUR NEW WINGMAN <span aria-hidden="true">↓</span></a><span>AI-generated aviation artwork · not a DCS screenshot</span></div>
+    </section>
+    <div class="mission-strip"><div class="container strip-inner">
+      <p><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>Windows & Linux</p>
+      <p><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v9a4 4 0 0 1-8 0V4Zm-3 8v1a7 7 0 0 0 14 0v-1m-7 8v3"/></svg>Keyboard & HOTAS PTT</p>
+      <p><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h7l1 2 1-2h7v16h-7l-1 1-1-1H4V4Zm8 2v15"/></svg>Your manuals, in context</p>
+      <p><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18"/></svg>Explore the source on GitHub</p>
+    </div></div>
+    <section class="section features-section" id="features"><div class="container">
+      <div class="section-top"><div><p class="eyebrow">01 / A LITTLE LESS WORKLOAD</p><h2>Less heads-down.<br>More <span class="muted-word">flying.</span></h2></div><p class="section-lead">Learning a complex aircraft takes time.<br>Your copilot keeps useful answers close, so you can stay with the flight.</p></div>
+      <div class="feature-grid">
+        <article class="feature"><span class="feature-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8"/></svg></span><span class="small-number">01</span><h3>Just ask your wingman.</h3><p>Hold your push-to-talk button and ask. Get short, spoken answers while the text streams into your overlay. Press again to interrupt.</p><span class="feature-foot">VOICE FIRST. HANDS ON.</span></article>
+        <article class="feature"><span class="feature-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h7l2 2 2-2h7v16h-7l-2 1-2-1H3V4Zm12 2v15M6 8h3m-3 4h3m6-4h3m-3 4h3"/></svg></span><span class="small-number">02</span><h3>Your aircraft. Your manuals.</h3><p>Aircraft detection and flight data add context. Local PDF search finds useful passages from your module’s manuals and shows the source pages.</p><span class="feature-foot">AIRCRAFT-AWARE ANSWERS.</span></article>
+        <article class="feature"><span class="feature-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m3 6 2 2 4-4m3 2h9M3 13l2 2 4-4m3 2h9M3 20l2 2 4-4m3 2h9"/></svg></span><span class="small-number">03</span><h3>One step. Then the next.</h3><p>Start a checklist built from indexed manuals. Move through it with a brief PTT press, or ask your copilot to repeat or go back.</p><span class="feature-foot">LEARN AT YOUR OWN PACE.</span></article>
+      </div>
+    </div></section>
+    <section class="section app-section" id="screenshots"><div class="container">
+      <div class="section-top"><div><p class="eyebrow">02 / YOUR NEW SEAT MATE</p><h2>Small footprint.<br>A lot in your corner.</h2></div><p class="section-lead">A compact overlay when you’re flying.<br>Room to fine-tune everything when you’re not.</p></div>
+      <div class="app-showcase">
+        <div class="showcase-sidebar">
+          <div class="screenshot-tabs" role="tablist" aria-label="Application screenshots" aria-orientation="vertical">
+            <button id="tab-overlay" type="button" role="tab" aria-selected="true" aria-controls="screenshot-panel" data-shot="overlay"><span>01</span><span class="tab-copy">In-flight overlay<small>Answers without the alt-tab.</small></span><span aria-hidden="true">↗</span></button>
+            <button id="tab-checklist" type="button" role="tab" aria-selected="false" aria-controls="screenshot-panel" tabindex="-1" data-shot="checklist"><span>02</span><span class="tab-copy">Guided checklists<small>A procedure, one step at a time.</small></span><span aria-hidden="true">↗</span></button>
+            <button id="tab-ai" type="button" role="tab" aria-selected="false" aria-controls="screenshot-panel" tabindex="-1" data-shot="ai"><span>03</span><span class="tab-copy">Your choice of AI<small>Cloud providers or local models.</small></span><span aria-hidden="true">↗</span></button>
+            <button id="tab-voice" type="button" role="tab" aria-selected="false" aria-controls="screenshot-panel" tabindex="-1" data-shot="voice"><span>04</span><span class="tab-copy">Make it sound right<small>Voice, pace, and radio character.</small></span><span aria-hidden="true">↗</span></button>
+          </div>
+          <p class="screenshot-disclosure">Real application UI, rendered with sample data. The current app interface and default voice experience are in French.</p>
+        </div>
+        <figure class="screenshot-panel" id="screenshot-panel" role="tabpanel" aria-labelledby="tab-overlay">
+          <div class="window-bar"><span><i></i><i></i><i></i></span><span>DCS COPILOTE <span aria-hidden="true">/</span> <span id="shot-label">OVERLAY</span></span><span>↗</span></div>
+          <button class="screenshot-stage image-zoom" type="button" id="gallery-zoom" data-zoom="assets/screenshots/overlay.png" data-caption="In-flight overlay — a compact, movable window for questions and streaming answers. Sample conversation." aria-label="Enlarge the current application screenshot">
+            <img id="gallery-image" src="assets/screenshots/overlay.png" alt="The real DCS Copilote overlay with a sample conversation" width="1576" height="612" loading="lazy"><span class="expand-hint">Expand screenshot <span aria-hidden="true">⤢</span></span>
+          </button>
+          <figcaption id="gallery-caption">A compact, movable window for questions and streaming answers.</figcaption>
+        </figure>
+      </div>
+      <noscript><div class="fallback-gallery"><figure><img src="assets/screenshots/checklist.png" alt="Guided checklist in the actual French app UI" loading="lazy"><figcaption>Guided checklists</figcaption></figure><figure><img src="assets/screenshots/settings-ai.png" alt="Actual AI provider settings in French" loading="lazy"><figcaption>AI provider settings</figcaption></figure><figure><img src="assets/screenshots/settings-voice.png" alt="Actual voice settings in French" loading="lazy"><figcaption>Voice settings</figcaption></figure></div></noscript>
+    </div></section>
+    <section class="section details-section"><div class="container details-grid">
+      <div class="details-copy"><p class="eyebrow">03 / THERE’S MORE ON THE FREQUENCY</p><h2>Built around<br>your <span class="muted-word">flying.</span></h2><p class="section-lead">Quick questions in the air. Longer explanations on the ground. A setup that fits how you want to learn.</p><a class="inline-link" href="https://github.com/Limoniak/dcs-copilote#interface">Read the full feature guide <span aria-hidden="true">↗</span></a></div>
+      <div class="detail-list">
+        <article><span>01</span><div><h3>A little situational awareness.</h3><p>Optional voice alerts use available flight data for gear, speed, fuel and sink rate. Enable the rules you want.</p></div><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 10 18H2L12 3Zm0 6v5m0 3v1"/></svg></article>
+        <article><span>02</span><div><h3>Your voice. Your atmosphere.</h3><p>Choose online or local speech, adjust the pace, and add a radio effect. A local fallback can keep the conversation going.</p></div><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 10v4m4-8v12m5-16v20m5-16v12m4-8v4"/></svg></article>
+        <article><span>03</span><div><h3>Bring the lesson home.</h3><p>Questions and answers are saved as daily Markdown notes. Pick up where you left off after the sortie.</p></div><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5V3Zm9 0v5h5M8 12h8m-8 4h6"/></svg></article>
+      </div>
+    </div></section>
+    <section class="section download-section" id="download"><div class="container">
+      <div class="section-top"><div><p class="eyebrow">04 / CLEARED TO GET STARTED</p><h2>Next sortie.<br>Bring a copilot.</h2></div><p class="section-lead">The first-run wizard walks you through your AI provider, voice, PTT button and DCS connection.</p></div>
+      <div class="download-grid">
+        <article class="download-card recommended"><div class="download-top"><span class="os-icon" aria-hidden="true">⊞</span><span class="pill">THE EASY WAY IN</span></div><h3>Windows</h3><p>The installer includes the app and its Python runtime. Download the latest release and follow the setup wizard.</p><a class="button" href="https://github.com/Limoniak/dcs-copilote/releases/latest">Download for Windows <span aria-hidden="true">↓</span></a><p class="download-small"><code>DCSCopilote-win-Setup.exe</code><br>Prefer a ZIP? A portable version is available too.</p></article>
+        <article class="download-card"><div class="download-top"><span class="os-icon code-icon" aria-hidden="true">&gt;_</span><span class="pill neutral">FOR THE HANDS-ON PILOT</span></div><h3>Linux & source</h3><p>Use Python 3.11 or 3.12 and the included scripts. Install the system dependencies listed in the guide first.</p><div class="code-block"><div><span>LINUX / TERMINAL</span><button type="button" id="copy-install" aria-label="Copy Linux installation commands">Copy <span aria-hidden="true">⧉</span></button></div><pre><code id="install-command">git clone https://github.com/Limoniak/dcs-copilote.git
+cd dcs-copilote
+./install.sh &amp;&amp; ./run.sh</code></pre></div><a class="inline-link" href="https://github.com/Limoniak/dcs-copilote#installation">Full installation guide <span aria-hidden="true">↗</span></a></article>
+      </div>
+      <p class="setup-note"><span aria-hidden="true">↳</span> You’ll need DCS World, a microphone, and an AI provider or local model. Online services may have usage limits or API fees.</p><p class="sr-only" role="status" id="copy-status"></p>
+    </div></section>
+    <section class="section faq-section" id="faq"><div class="container faq-grid">
+      <div><p class="eyebrow">A QUICK PREFLIGHT</p><h2>Good questions.<br><span class="muted-word">Straight answers.</span></h2><p class="faq-aside">Something else on your mind?<br><a class="inline-link" href="https://github.com/Limoniak/dcs-copilote/issues">Ask on GitHub <span aria-hidden="true">↗</span></a></p></div>
+      <div class="faq-list">
+        <details><summary>Is the application available in English?<span aria-hidden="true">+</span></summary><p>This website is in English. The application’s interface, built-in prompts and default voices are currently French-first. English interface localization is on the <a href="https://github.com/Limoniak/dcs-copilote/blob/main/ROADMAP.md">roadmap</a>. The screenshots show the current app.</p></details>
+        <details><summary>Do I need an internet connection?<span aria-hidden="true">+</span></summary><p>Online AI providers, cloud transcription and Microsoft voices need internet access. A local setup is possible using Ollama, Whisper and Piper after downloading the models. Local performance depends on your hardware.</p></details>
+        <details><summary>Which AI providers can I use?<span aria-hidden="true">+</span></summary><p>The app includes presets for Groq, OpenAI, Gemini, xAI, OpenRouter and Ollama, plus custom OpenAI-compatible endpoints. You choose the provider and model. API pricing, free allowances and quotas depend on the service.</p></details>
+        <details><summary>What happens to my manuals and audio?<span aria-hidden="true">+</span></summary><p>PDFs and their search index stay on your machine. When you choose an online AI, the question, supplied conversation history, flight context and relevant manual excerpts are sent to that provider. Online transcription sends audio to the selected service; Whisper can transcribe locally. Online speech synthesis receives the text to read.</p></details>
+        <details><summary>Does the overlay work in VR?<span aria-hidden="true">+</span></summary><p>The overlay is not visible in VR or exclusive fullscreen. Use borderless windowed mode for the desktop overlay. Voice remains available in VR. OpenKneeboard integration is on the roadmap.</p></details>
+        <details><summary>Can I rely on every answer?<span aria-hidden="true">+</span></summary><p>AI can make mistakes. Indexed manuals provide useful context and source references, but do not guarantee accuracy. Check procedures against your aircraft module’s documentation. DCS Copilote is made for simulation, not real-world flight.</p></details>
+      </div>
+    </div></section>
+    <section class="community-section"><div class="container community-inner"><div><p class="eyebrow">THE NEXT WAYPOINT</p><h2>Make a good wingman better.</h2><p>Found a bug? Have an idea? Help shape the next version on GitHub.</p></div><a class="button button-outline" href="https://github.com/Limoniak/dcs-copilote">Explore the project <span aria-hidden="true">↗</span></a></div></section>
+  </main>
+  <footer class="site-footer"><div class="container"><div class="footer-main"><a class="brand" href="#top"><img src="assets/marque.svg" width="36" height="36" alt=""><span>DCS <strong>Copilote</strong></span></a><p>A voice beside you. You’re still the pilot.</p><nav aria-label="Footer navigation"><a href="https://github.com/Limoniak/dcs-copilote">Source</a><a href="https://github.com/Limoniak/dcs-copilote/releases">Releases</a><a href="https://github.com/Limoniak/dcs-copilote/blob/main/ROADMAP.md">Roadmap</a></nav></div><div class="footer-bottom"><small>An independent community project. Not affiliated with Eagle Dynamics.</small><a href="#top">BACK TO TOP <span aria-hidden="true">↑</span></a></div></div></footer>
+  <dialog id="screenshot-dialog" aria-label="Expanded application screenshot"><div class="dialog-toolbar"><p id="dialog-caption"></p><button type="button" id="close-dialog" aria-label="Close screenshot">Close <span aria-hidden="true">×</span></button></div><img id="dialog-image" src="assets/screenshots/overlay.png" alt=""></dialog>
+</body>
+</html>

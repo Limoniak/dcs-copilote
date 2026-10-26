@@ -29,6 +29,13 @@ Fabrication à la main sous Windows : `pip install -r requirements.txt pyinstall
 
 Tests : `python -m pytest tests` (logique et interface sans écran, sans micro ni DCS) ; lancés aussi par GitHub Actions à chaque push.
 
+## Site de présentation
+
+La page de présentation destinée à GitHub Pages se trouve dans [`docs/`](docs/README.md).
+Elle présente les fonctionnalités, l’installation et les téléchargements. Le workflow
+`.github/workflows/pages.yml` la déploie lors des modifications du site sur `main`, une fois
+**Settings → Pages → Source → GitHub Actions** sélectionné dans le dépôt.
+
 ## Installation
 
 **Windows** (Python 3.11/3.12) : `install.bat`, puis `run.bat`.
