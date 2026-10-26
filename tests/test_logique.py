@@ -283,6 +283,21 @@ def test_decoupage_des_phrases_pour_la_voix():
     assert s.flush() == ["Tir"]
 
 
+def test_repete_relit_la_derniere_reponse_sans_l_ia():
+    from dcs_copilote import app
+    calls = []
+    fake = types.SimpleNamespace(checklist=None, last_answer="Train sorti, trois vertes.",
+                                 repeat=lambda: calls.append("repeat"), _ready=lambda: None,
+                                 _answer=lambda *a: calls.append("ia"), _start_checklist=lambda *a: calls.append("cl"))
+    for q in ("Répète.", "Redis ?", "Quoi ?"):
+        app.App._route(fake, q, "vol", True, 1)
+    app.App._route(fake, "Répète la procédure de démarrage moteur s'il te plaît", "vol", True, 1)
+    assert calls == ["repeat", "repeat", "repeat", "ia"]      # une vraie question part toujours à l'IA
+    fake.last_answer = ""
+    app.App._route(fake, "Répète", "vol", True, 1)
+    assert calls[-1] == "ia"                                  # rien à répéter : question normale
+
+
 def test_checklist():
     assert cl.parse_steps("1. Batterie ON\n2. APU ON\n3) Moteur droit") == ["Batterie ON", "APU ON", "Moteur droit"]
     assert [cl.command(x) for x in ("suivant", "répète", "précédent", "stop", "bonjour")] == \

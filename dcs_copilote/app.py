@@ -760,6 +760,9 @@ class App:
         cmd = cl.command(question) if self.checklist is not None else None
         if cmd:
             self.checklist_cmd(cmd)
+        elif self.last_answer and cl.command(question) == "repeat":
+            self.repeat()                  # « répète » : relue tout de suite, sans redemander à l'IA (ni quota)
+            self._ready()
         elif self.last_answer and (cl.is_detail(question) or
                                    ("détaille" in self.last_answer.lower() and cl.is_yes(question))):
             self._answer("Détaille ta réponse précédente : toutes les étapes et les explications utiles.",

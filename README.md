@@ -51,7 +51,7 @@ sudo apt install python3-venv libportaudio2 libxcb-cursor0 espeak-ng
 Overlay semi-transparent toujours au premier plan (Qt / PySide6) : appareil, réponse affichée au fil de l'eau (mise en forme Markdown), champ de question, pastille d'état (vert prêt · rouge écoute · ambre réflexion). Fais-le glisser par son en-tête ; sa position est mémorisée. Le coin bas-droit le redimensionne (largeur et hauteur de la réponse) ; la taille est mémorisée.
 
 - **Micro** à droite du champ : maintiens-le pour parler (pratique pour tester sans bouton PTT).
-- **Répéter** relit la dernière réponse ; **Détailler** demande la version complète.
+- **Répéter** (ou « répète », « redis », « quoi ? » à la voix) relit la dernière réponse, sans redemander à l'IA ; **Détailler** demande la version complète.
 - **Haut-parleur** : lire ou non les réponses aux questions tapées.
 - Icône dans la **zone de notification** (si le bureau en a une) : afficher / masquer l'overlay, réglages, quitter.
 - Une seule instance à la fois ; journal dans `logs/dcs-copilote.log` (bouton « Ouvrir le journal » des réglages).
