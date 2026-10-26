@@ -46,12 +46,13 @@ FR_EN = [(r"décoll\w*", "airfield takeoff"), (r"atterri\w*", "airfield landing"
 
 
 TOC = re.compile(r"\.{6,}\s*\d+")
+CARRIER = re.compile(r"porte-avions|appont|catapult|CVN|carrier", re.I)   # sinon : piste par défaut
 
 
 def _translated(question):
     """([(position, terme anglais)], phrase aux termes traduits)."""
     found, sentence = [], question
-    carrier = re.search(r"porte-avions|appont|catapult|CVN", question, flags=re.I)
+    carrier = CARRIER.search(question)
     for pat, en in FR_EN:
         en = en.replace("airfield", "carrier") if carrier else en
         found += [(m.start(), en) for m in re.finditer(pat, question, flags=re.I)]
@@ -376,7 +377,7 @@ class Manuals:
                         ranked[i] = (score, sem)
             phrases = key_phrases(query)
             for i, (score, sem) in ranked.items():
-                text = re.sub(r"\s+", " ", self.chunks[i]["text"].lower())
+                text = re.sub(r"[\s-]+", " ", self.chunks[i]["text"].lower())      # « START-UP » = « start up »
                 hits = sum(p in text for p in phrases)
                 ranked[i] = (score + min(0.12, 0.06 * hits), sem)
             # pages de sommaire (lignes « Titre ........ 81 ») : des titres, pas de contenu
@@ -392,6 +393,25 @@ class Manuals:
                 c = self.chunks[i]
                 out.append((score, c, self.docs[c["doc"]]))
             return out
+
+    def procedure(self, query, aircraft=None, max_chars=7000):
+        """Passages pour une checklist : le meilleur passage et ceux qui le suivent dans le même document.
+        Une procédure s'étend sur plusieurs pages sous son titre ; la recherche seule renvoyait souvent la page de
+        titre sans les étapes, et l'IA comblait en inventant."""
+        res = self.search(query, aircraft, 5)
+        if not res:
+            return res
+        if not CARRIER.search(query):              # piste par défaut : pas la section porte-avions du manuel
+            res = [r for r in res if not CARRIER.search(r[1]["text"][:400])] or res
+        score, best, doc = res[0]
+        out, total = [res[0]], len(best["text"])
+        with self._lock:
+            i = next(n for n, c in enumerate(self.chunks) if c is best) + 1
+            while i < len(self.chunks) and self.chunks[i]["doc"] == best["doc"] and total < max_chars:
+                out.append((score, self.chunks[i], doc))
+                total += len(self.chunks[i]["text"])
+                i += 1
+        return out
 
     def _rank(self, query, idx):
         """[(chunk, score, similarité)] : pré-sélection sémantique, puis bonus mots-clés pour les termes

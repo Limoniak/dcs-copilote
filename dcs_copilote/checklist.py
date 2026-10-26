@@ -55,11 +55,15 @@ def command(text):
 
 
 PROMPT = """Tu prépares une checklist que le pilote va dérouler en vol, étape par étape.
+- En français, même si les extraits du manuel sont en anglais.
+- Prends les étapes dans les extraits du manuel, dans leur ordre ; n'ajoute aucune commande qui n'y figure pas.
+  S'ils ne contiennent pas la procédure, donne seulement les étapes dont tu es certain.
 - Donne la procédure demandée sous forme de liste numérotée : une seule action par ligne.
 - 12 mots maximum par ligne, à l'impératif, dans l'ordre exact de la procédure.
 - Mets les noms des commandes du cockpit en anglais entre guillemets « », avec la position voulue.
 - Aucune introduction, aucune conclusion, aucun commentaire : seulement les lignes numérotées.
-- Si la procédure n'existe pas pour cet appareil, réponds par une seule ligne : 1. Procédure inconnue."""
+- Si la procédure n'existe pas pour cet appareil, réponds par une seule ligne : 1. Procédure inconnue.
+Rappel : chaque ligne est écrite en français (seuls les noms des commandes restent en anglais)."""
 
 
 def parse_steps(text):

@@ -18,6 +18,7 @@ MIN_AUDIO_S = 0.35
 DCS_SCRIPT_VERSION = 2          # champ « v » envoyé par dcs/DCSAssistant.lua
 REPO_URL = "https://github.com/Limoniak/dcs-copilote"
 HISTORY_DIR = os.path.join("data", "historique")
+PROCEDURE_CHARS = 7000          # checklist : la procédure s'étend sur plusieurs pages (≈ 2 000 jetons)
 
 
 class App:
@@ -548,12 +549,20 @@ class App:
         finally:
             self._chucks_lock.release()
 
-    def _manual_context(self, question):
-        """Passages des manuels pour la question (+ la précédente si c'est une relance courte)."""
+    def _manual_context(self, question, procedure=False):
+        """Passages des manuels pour la question (+ la précédente si c'est une relance courte).
+        procedure : pour une checklist, la procédure entière (pages qui suivent son titre)."""
         from .manuals import format_context, sources_line
         if not (self.cfg["manuals"].get("enabled", True) and self.manuals.ready):
             return "", ""
         query = question
+        if procedure:
+            try:
+                res = self.manuals.procedure(question, self.current_aircraft())
+            except Exception as e:  # noqa: BLE001
+                print(f"[manuels] recherche impossible : {e}", flush=True)
+                return "", ""
+            return format_context(res, max_chars=PROCEDURE_CHARS), sources_line(res)
         if len(question.split()) < 6:
             # list() copie d'un bloc : l'historique peut être vidé par un autre thread (changement d'appareil)
             prev = [m["content"] for m in list(self.history) if m["role"] == "user"]
@@ -777,7 +786,7 @@ class App:
         import re
         self.overlay.start_answer(question)
         self.overlay.set_status("Préparation de la checklist…", state="busy")
-        manual, sources = self._manual_context(question)
+        manual, sources = self._manual_context(question, procedure=True)
         system = system_prompt(self.current_aircraft(), self.dcs.snapshot(), "sol",
                                custom=self.cfg["llm"].get("custom_prompt", ""), manual=manual,
                                callsign=self.cfg["llm"].get("callsign", ""))

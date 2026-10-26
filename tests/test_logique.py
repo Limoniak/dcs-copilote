@@ -22,6 +22,24 @@ def test_recherche_anglaise_vise_la_piste_ou_le_porte_avions():
     assert key_phrases("Comment configurer les GBU-12 laser ?") >= {"gbu-12", "set up"}
 
 
+def test_procedure_entiere_pour_une_checklist(monkeypatch):
+    import threading
+
+    from dcs_copilote.manuals import Manuals
+    m = Manuals(print)
+    m._lock = threading.RLock()
+    m.docs = [{"name": "Guide EN.pdf"}, {"name": "Autre.pdf"}]
+    m.chunks = [{"doc": 0, "page": 99, "text": "AIRCRAFT CARRIER LAUNCH 1. Attach the launch bar"},
+                {"doc": 0, "page": 100, "text": "AIRFIELD TAKEOFF 1. Align the aircraft"},
+                {"doc": 0, "page": 101, "text": "5. At rotation speed, pull 6 to 8 degrees"},
+                {"doc": 1, "page": 1, "text": "autre document"}]
+    monkeypatch.setattr(m, "search", lambda q, a, k: [(0.9, m.chunks[0], m.docs[0]), (0.8, m.chunks[1], m.docs[0])])
+    pages = [c["page"] for _s, c, _d in m.procedure("Checklist décollage", "F/A-18C Hornet")]
+    assert pages == [100, 101]                        # piste : la suite du titre, sans le porte-avions ni l'autre PDF
+    pages = [c["page"] for _s, c, _d in m.procedure("Checklist catapultage porte-avions", "F/A-18C Hornet")]
+    assert pages[0] == 99
+
+
 def test_sommaire_reconnu():
     assert len(TOC.findall("Takeoff ........ 100\nLanding ......... 101\nTaxi ........ 99")) == 3
     assert not TOC.findall("Hold the stick back until 6 to 8 degrees.")
