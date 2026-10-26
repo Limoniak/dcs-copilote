@@ -82,7 +82,10 @@ class App:
         self._fetching = set()
         threading.Thread(target=self._startup_manuals, daemon=True).start()
         threading.Thread(target=self._chucks_loop, daemon=True).start()
-        if self.stt_api is None:               # en ligne : Whisper local chargé seulement s'il doit servir
+        # en ligne : Whisper local chargé seulement s'il doit servir. 1er lancement : pas avant l'assistant, où la
+        # clé Groq est souvent collée (sinon des centaines de Mo téléchargés pour rien) ; l'enregistrement le charge
+        # si besoin, sinon la 1re question
+        if self.stt_api is None and not first_run:
             threading.Thread(target=self._load_stt, daemon=True).start()
         else:
             self._ready()
