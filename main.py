@@ -20,6 +20,11 @@ for _stream in (sys.stdout, sys.stderr):
     if _stream is not None and hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
+# téléchargement du modèle de recherche (Hugging Face) : avertissements sans conséquence qui noyaient le journal
+for _k, _v in (("HF_HUB_DISABLE_SYMLINKS_WARNING", "1"), ("HF_HUB_DISABLE_PROGRESS_BARS", "1"),
+               ("HF_HUB_VERBOSITY", "error")):
+    os.environ.setdefault(_k, _v)
+
 FROZEN = getattr(sys, "frozen", False)
 if FROZEN:
     # installation, mise à jour, désinstallation : Velopack lance l'appli avec ses arguments et attend ce hook
