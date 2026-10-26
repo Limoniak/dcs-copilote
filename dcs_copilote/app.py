@@ -81,6 +81,8 @@ class App:
         self.manuals = Manuals(self.log)
         self._chucks_lock = threading.Lock()
         self._fetching = set()
+        self.index_progress = None             # (fait, total, message) pendant une indexation, sinon None
+        self.stop_index = False
         threading.Thread(target=self._startup_manuals, daemon=True).start()
         threading.Thread(target=self._chucks_loop, daemon=True).start()
         # en ligne : Whisper local chargé seulement s'il doit servir. 1er lancement : pas avant l'assistant, où la
@@ -404,6 +406,22 @@ class App:
         print(msg, flush=True)
         self.overlay.set_status(msg, state="ready")
 
+    def build_index(self, pdfs, progress=None, threads=None):
+        """build_index qui publie sa progression dans self.index_progress : les Réglages la retrouvent
+        même s'ils sont fermés puis rouverts en cours de route."""
+        from .manuals import build_index
+        self.stop_index = False
+
+        def prog(done, total, msg):
+            self.index_progress = (done, total, msg)
+            if progress:
+                progress(done, total, msg)
+        self.index_progress = (0, 1, "Indexation en cours…")
+        try:
+            return build_index(pdfs, prog, lambda: self.stop_index, threads)
+        finally:
+            self.index_progress = None
+
     def load_manuals(self):
         if not self.cfg["manuals"].get("enabled", True):
             return
@@ -417,7 +435,7 @@ class App:
     def _startup_manuals(self):
         """Au démarrage : charge l'index, repère DCS, indexe les manuels officiels nouveaux ou mis à jour,
         puis récupère le guide de l'appareil courant s'il manque."""
-        from .manuals import build_index, dcs_install_candidates, find_pdfs, index_is_current
+        from .manuals import dcs_install_candidates, find_pdfs, index_is_current
         self.load_manuals()
         m = self.cfg["manuals"]
         if not m.get("enabled", True):
@@ -435,7 +453,7 @@ class App:
                     time.sleep(30)
                 self.overlay.info("Je lis les manuels de tes modules (première fois : quelques minutes)…")
                 try:
-                    s = build_index(pdfs, threads=2)
+                    s = self.build_index(pdfs, threads=2)
                     self.load_manuals()
                     self.overlay.info(f"Manuels prêts : {s['docs']} documents.")
                 except Exception as e:  # noqa: BLE001
@@ -466,7 +484,7 @@ class App:
 
     def _fetch_manual(self, aircraft):
         from . import chucks
-        from .manuals import build_index, find_pdfs
+        from .manuals import find_pdfs
         try:
             state = chucks.load_state()
             guides = state["guides"] or chucks.list_guides()
@@ -486,7 +504,7 @@ class App:
                     raise RuntimeError("; ".join(errors))
                 self.overlay.info(f"Je lis le guide du {name}…")
                 m = self.cfg["manuals"]
-                build_index(find_pdfs(m.get("dcs_dir"), m.get("extra_dir")), threads=1)
+                self.build_index(find_pdfs(m.get("dcs_dir"), m.get("extra_dir")), threads=1)
                 self.load_manuals()
             self.overlay.info(f"Guide du {name} prêt : mes réponses s'appuient dessus.")
         except Exception as e:  # noqa: BLE001
@@ -534,7 +552,7 @@ class App:
         """Télécharge les guides nouveaux ou modifiés puis réindexe. En arrière-plan, l'analyse
         (gourmande en CPU) attend que le pilote ne soit plus en vol pour ne pas faire chuter les FPS."""
         from . import chucks
-        from .manuals import build_index, find_pdfs
+        from .manuals import find_pdfs
         if not self._chucks_lock.acquire(blocking=False):
             raise RuntimeError("mise à jour déjà en cours")
         try:
@@ -546,8 +564,8 @@ class App:
                 while background and self.dcs.snapshot() is not None:
                     time.sleep(30)
                 m = cfg["manuals"]
-                build_index(find_pdfs(m.get("dcs_dir"), m.get("extra_dir")),
-                            lambda d, n, msg: progress(msg, d / max(1, n)), threads=2 if background else None)
+                self.build_index(find_pdfs(m.get("dcs_dir"), m.get("extra_dir")),
+                                 lambda d, n, msg: progress(msg, d / max(1, n)), threads=2 if background else None)
                 self.load_manuals()
             if updated and background:
                 self.overlay.info("Chuck's Guides mis à jour : " + ", ".join(updated))

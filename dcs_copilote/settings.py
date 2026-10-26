@@ -751,7 +751,7 @@ class SettingsWindow(QWidget):
         self.b_stop_index = QPushButton("Arrêter")
         self.b_stop_index.setObjectName("ghost")
         self.b_stop_index.hide()
-        self.b_stop_index.clicked.connect(lambda: setattr(self, "_stop_index", True))
+        self.b_stop_index.clicked.connect(lambda: setattr(self.app, "stop_index", True))
         irow.addWidget(self.b_stop_index)
         irow.addStretch(1)
         card.lay.addLayout(irow)
@@ -762,6 +762,10 @@ class SettingsWindow(QWidget):
         self.index_result = card.add_widget(_result())
         s = self.app.manuals.summary() if self.app.manuals.ready else None
         _show(self.index_result, self._summary_text(s) if s else "Aucun manuel indexé pour l'instant.")
+        # la progression vit dans l'appli : on la retrouve si une indexation tourne déjà (fenêtre rouverte, arrière-plan)
+        self._index_busy = False
+        QTimer(self, interval=300, timeout=self._watch_index).start()
+        self._watch_index()
         lay.addWidget(card)
 
         lay.addWidget(self._chucks_card())
@@ -929,8 +933,23 @@ class SettingsWindow(QWidget):
         mods = ", ".join(f"{k} ({v})" for k, v in sorted(s["modules"].items()))
         return f"✓ {s['docs']} documents indexés, {s['chunks']} extraits — {mods}"
 
+    def _watch_index(self):
+        p = self.app.index_progress
+        if p:
+            done, total, msg = p
+            self.index_bar.setMaximum(max(1, total))
+            self.index_bar.setValue(done)
+            _show(self.index_result, msg)
+        elif self._index_busy and self.app.manuals.ready:
+            _show(self.index_result, self._summary_text(self.app.manuals.summary()), "ok")
+        if bool(p) != self._index_busy:
+            self.index_bar.setVisible(bool(p))
+            self.b_stop_index.setVisible(bool(p))
+            self.b_index.setEnabled(not p)
+        self._index_busy = bool(p)
+
     def _index_manuals(self):
-        from .manuals import build_index, find_pdfs
+        from .manuals import find_pdfs
         dcs_dir, extra = self.cb_dcsdir.get().strip(), self.e_extra.get().strip()
         pdfs = find_pdfs(dcs_dir, extra)
         if not pdfs:
@@ -938,33 +957,22 @@ class SettingsWindow(QWidget):
                                      "Mods/aircraft) ou le dossier perso.", "err")
             return
         self.c["manuals"].update(dcs_dir=dcs_dir, extra_dir=extra)
-        self._stop_index = False
         self.b_index.setEnabled(False)
-        self.b_stop_index.show()
-        self.index_bar.show()
-        self.index_bar.setValue(0)
         _show(self.index_result, f"{len(pdfs)} PDF trouvés…")
-
-        def progress(done, total, msg):
-            def f():
-                if self.alive():
-                    self.index_bar.setMaximum(max(1, total))
-                    self.index_bar.setValue(done)
-                    _show(self.index_result, msg)
-            self.call(f)
 
         def work():
             # même verrou que l'indexation en arrière-plan : deux écritures de l'index le rendraient incohérent
             if not self.app._chucks_lock.acquire(blocking=False):
-                raise RuntimeError("une indexation est déjà en cours en arrière-plan, réessaie dans quelques minutes")
+                raise RuntimeError("une mise à jour des manuels est déjà en cours, réessaie dans quelques minutes")
             try:
-                s = build_index(pdfs, progress, lambda: self._stop_index)
+                s = self.app.build_index(pdfs)
             finally:
                 self.app._chucks_lock.release()
             self.app.load_manuals()
             return s
 
         def done(res):
+            self._index_busy = False           # le résultat ci-dessous prime sur celui de _watch_index
             self.b_index.setEnabled(True)
             self.b_stop_index.hide()
             self.index_bar.hide()

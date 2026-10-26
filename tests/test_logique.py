@@ -10,6 +10,24 @@ from dcs_copilote.textutil import SentenceSplitter
 
 
 # ------------------------------------------------------------------ manuels
+def test_progression_de_l_indexation_partagee_avec_les_reglages(monkeypatch):
+    from dcs_copilote import app, manuals
+    fake = types.SimpleNamespace(index_progress=None, stop_index=True)
+    seen = []
+
+    def build(pdfs, progress, should_stop, threads):
+        progress(3, 10, "Analyse des manuels…")
+        seen.append((fake.index_progress, should_stop()))
+        raise InterruptedError("indexation annulée")
+    monkeypatch.setattr(manuals, "build_index", build)
+    try:
+        app.App.build_index(fake, [])
+    except InterruptedError:
+        pass
+    # visible par une fenêtre de réglages rouverte, « Arrêter » d'une fois précédente oublié, effacé même sur erreur
+    assert seen == [((3, 10, "Analyse des manuels…"), False)] and fake.index_progress is None
+
+
 def test_seules_les_versions_fr_en_sont_gardees():
     names = {"Guide FR", "Guide EN", "Guide DE", "Guide RU (2023)", "Quick DE", "Quick ES", "Chuck Hornet"}
     assert keep_languages(names) == {"Guide FR", "Guide EN", "Chuck Hornet", "Quick DE", "Quick ES"}
