@@ -7,6 +7,15 @@ La page comprend une galerie de quatre captures agrandissables, un menu mobile,
 les téléchargements, la copie des commandes Linux et une FAQ. La navigation au clavier
 et la préférence système de réduction des animations sont prises en compte.
 
+La seconde version ajoute une scène en parallaxe (ciel et avion séparés), une navigation
+fixe avec progression de lecture, des apparitions au défilement et des transitions de galerie.
+Le bouton **Motion on/off** coupe les animations ; le réglage système de réduction des mouvements
+est prioritaire. Sur téléphone, la parallaxe est désactivée.
+
+Le parcours vocal interactif est une illustration scénarisée et traduite en anglais :
+il n'enregistre aucun son et n'appelle aucun service IA. Sa lecture est déclenchée par le visiteur,
+peut être interrompue, et s'arrête lorsque l'onglet passe en arrière-plan.
+
 Le site est en anglais ; l'interface de l'application reste en français. Cette distinction
 est indiquée dans la galerie et la FAQ.
 
@@ -37,6 +46,7 @@ Documentation : [workflows personnalisés GitHub Pages](https://docs.github.com/
 - `index.html` : textes, sections et liens vers les téléchargements.
 - `style.css` : mise en page responsive et couleurs.
 - `demo.js` : galerie, agrandissement des captures, menu mobile et copie des commandes.
+- `motion.js` : parallaxe, navigation, apparitions au scroll et parcours vocal illustratif.
 - `assets/` : logos, illustration, captures de l'application et polices locales.
 - [`assets/README.md`](assets/README.md) : provenance des visuels et prompt de génération.
 
@@ -62,6 +72,10 @@ Contrôles dans le navigateur aux largeurs 320, 390, 768, 1024 et 1440 px :
 absence de débordement horizontal, menu mobile, galerie, agrandissement et navigation au clavier.
 La FAQ et la copie des commandes sont également vérifiées. Ces contrôles ne constituent
 pas une validation sur de vrais téléphones ni dans tous les navigateurs.
+
+Pour les effets : vérifier le parcours automatique et ses étapes manuelles, le retour en haut,
+la progression de lecture, puis **Motion off** (contenu visible et effets retirés). Contrôler
+également la galerie après des changements rapides d'onglet et la fermeture des captures avec Échap.
 
 Les liens relatifs permettent de servir le site sous `/dcs-copilote/` et en local.
 Le bouton de téléchargement ouvre la dernière release, sans figer un numéro de version.

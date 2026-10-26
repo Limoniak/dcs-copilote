@@ -52,15 +52,34 @@ const tabs = Array.from(document.querySelectorAll("[data-shot]"));
 const galleryImage = document.getElementById("gallery-image");
 const galleryZoom = document.getElementById("gallery-zoom");
 const screenshotPanel = document.getElementById("screenshot-panel");
+const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
+const motionEnabled = () => !motionPreference.matches && document.documentElement.dataset.motion !== "off";
+let gallerySelection = 0;
+let galleryAnimation;
 
-function selectShot(tab) {
+async function selectShot(tab) {
   const shot = shots[tab.dataset.shot];
   if (!shot) return;
+  const selection = ++gallerySelection;
   for (const item of tabs) {
     const active = item === tab;
     item.setAttribute("aria-selected", String(active));
     item.tabIndex = active ? 0 : -1;
   }
+  screenshotPanel.setAttribute("aria-busy", "true");
+  const incoming = new Image();
+  incoming.src = shot.src;
+  try {
+    await incoming.decode();
+  } catch {
+    if (selection === gallerySelection) {
+      document.getElementById("gallery-caption").textContent = "Screenshot unavailable. Please try again.";
+      screenshotPanel.removeAttribute("aria-busy");
+    }
+    return;
+  }
+  if (selection !== gallerySelection) return;
+  galleryAnimation?.cancel();
   galleryImage.src = shot.src;
   galleryImage.alt = shot.alt;
   document.getElementById("shot-label").textContent = shot.label;
@@ -68,6 +87,13 @@ function selectShot(tab) {
   screenshotPanel.setAttribute("aria-labelledby", tab.id);
   galleryZoom.dataset.zoom = shot.src;
   galleryZoom.dataset.caption = `${shot.caption} Actual French UI with sample data.`;
+  screenshotPanel.removeAttribute("aria-busy");
+  if (motionEnabled() && galleryImage.animate) {
+    galleryAnimation = galleryImage.animate([
+      { opacity: .15, transform: "translateY(16px) scale(.975)" },
+      { opacity: 1, transform: "translateY(0) scale(1)" },
+    ], { duration: 500, easing: "cubic-bezier(.2,.65,.3,1)" });
+  }
 }
 
 for (const [index, tab] of tabs.entries()) {
@@ -93,6 +119,9 @@ for (const button of document.querySelectorAll("[data-zoom]")) {
     dialogImage.alt = button.querySelector("img").alt;
     document.getElementById("dialog-caption").textContent = button.dataset.caption;
     dialog.showModal();
+    if (motionEnabled() && dialog.animate) {
+      dialog.animate([{ opacity: 0, transform: "translateY(18px) scale(.97)" }, { opacity: 1, transform: "translateY(0) scale(1)" }], { duration: 300, easing: "ease-out" });
+    }
   });
 }
 document.getElementById("close-dialog").addEventListener("click", () => dialog.close());
@@ -100,6 +129,13 @@ dialog.addEventListener("click", (event) => {
   const rect = dialog.getBoundingClientRect();
   if (event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right ||
       event.clientY < rect.top || event.clientY > rect.bottom)) dialog.close();
+});
+
+motionPreference.addEventListener("change", () => {
+  if (motionPreference.matches) {
+    galleryAnimation?.cancel();
+    dialog.getAnimations().forEach(animation => animation.cancel());
+  }
 });
 
 const copyButton = document.getElementById("copy-install");

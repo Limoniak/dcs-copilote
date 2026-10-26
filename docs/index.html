@@ -17,13 +17,16 @@
   <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
   <link rel="preload" href="assets/fonts/manrope.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="preload" href="assets/fonts/spacegrotesk.ttf" as="font" type="font/ttf" crossorigin>
-  <link rel="preload" href="assets/aviation-artwork.webp" as="image" fetchpriority="high">
+  <link rel="preload" href="assets/parallax-sky.webp" as="image" fetchpriority="high">
+  <link rel="preload" href="assets/parallax-aircraft.webp" as="image" fetchpriority="high">
   <link rel="stylesheet" href="style.css">
   <script src="demo.js" defer></script>
+  <script src="motion.js" defer></script>
 </head>
-<body>
+<body id="top">
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header" id="top">
+  <header class="site-header">
+    <div class="reading-progress" aria-hidden="true"></div>
     <div class="container header-inner">
       <a class="brand" href="#top" aria-label="DCS Copilote home"><img src="assets/marque.svg" width="40" height="40" alt=""><span>DCS <strong>Copilote</strong></span></a>
       <button class="menu-toggle" type="button" aria-controls="main-nav" aria-expanded="false" aria-label="Open navigation"><span></span><span></span></button>
@@ -36,12 +39,20 @@
   </header>
   <main id="main">
     <section class="hero" aria-labelledby="hero-title">
-      <img class="hero-art" src="assets/aviation-artwork.webp" width="1983" height="793" alt="" fetchpriority="high">
+      <div class="hero-scene" aria-hidden="true">
+        <img class="hero-art" src="assets/parallax-sky.webp" width="1983" height="793" alt="" fetchpriority="high">
+        <div class="hero-grid"></div>
+        <span class="scene-wordmark">COPILOTE</span>
+        <img class="hero-aircraft" src="assets/parallax-aircraft.webp" alt="" fetchpriority="high">
+        <div class="flight-reticle"><span></span><i></i><span></span></div>
+        <div class="scene-bearing"><span>270</span><i></i><span>300</span><i></i><span>330</span><i></i><span>N</span><i></i><span>030</span></div>
+        <div class="scene-caption"><span class="signal-dot"></span> A DIFFERENT KIND OF WINGMAN <span>EST. IN THE COCKPIT</span></div>
+      </div>
       <div class="hero-shade"></div>
       <div class="container hero-layout">
         <div class="hero-copy">
           <p class="eyebrow"><span class="signal-dot"></span> YOUR VOICE COMPANION FOR DCS WORLD</p>
-          <h1 id="hero-title">Your cockpit.<br>Now with<br><span>a copilot.</span></h1>
+          <h1 id="hero-title"><span class="title-line">Your cockpit.</span><span class="title-line">Now with</span><span class="title-line accent-line">a copilot.</span></h1>
           <p class="hero-intro">Hands on the HOTAS. Eyes on the horizon.<br>Ask, learn, and work through your checklists with an extra voice in the cockpit.</p>
           <div class="hero-buttons">
             <a class="button" href="https://github.com/Limoniak/dcs-copilote/releases/latest"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg> Download for Windows</a>
@@ -57,7 +68,7 @@
           <figcaption>Actual app. Sample conversation. French interface.</figcaption>
         </figure>
       </div>
-      <div class="container hero-bottom"><a href="#features">MEET YOUR NEW WINGMAN <span aria-hidden="true">↓</span></a><span>AI-generated aviation artwork · not a DCS screenshot</span></div>
+      <div class="container hero-bottom"><a href="#experience"><span class="scroll-cue" aria-hidden="true"></span> SCROLL TO GET ON FREQUENCY</a><span>AI-generated aviation artwork · not a DCS screenshot</span></div>
     </section>
     <div class="mission-strip"><div class="container strip-inner">
       <p><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>Windows & Linux</p>
@@ -65,6 +76,17 @@
       <p><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h7l1 2 1-2h7v16h-7l-1 1-1-1H4V4Zm8 2v15"/></svg>Your manuals, in context</p>
       <p><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18"/></svg>Explore the source on GitHub</p>
     </div></div>
+    <section class="section experience-section" id="experience" aria-labelledby="experience-title"><div class="container">
+      <div class="section-top"><div><p class="eyebrow">THE SHORTEST WAY TO AN ANSWER</p><h2 id="experience-title">One button.<br><span class="muted-word">A whole conversation.</span></h2></div><p class="section-lead">From the moment you press PTT to the answer in your headset. Take the interaction for a spin.</p></div>
+      <div class="radio-console">
+        <div class="console-bar"><span><span class="signal-dot"></span> COPILOTE / INTERACTION PREVIEW</span><span>NO MICROPHONE OR API USED</span></div>
+        <div class="radio-content">
+          <div class="radio-transcript" aria-live="polite" aria-atomic="true"><span class="radio-channel" id="radio-channel">01 / READY TO TRANSMIT</span><p id="radio-message">Your next question is<br>one button away.</p><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="radio-caption" id="radio-caption">Illustrative walkthrough. Dialogue translated from French.</span></div>
+          <div class="radio-controls"><span class="radio-dial" aria-hidden="true"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44"/><circle class="dial-progress" cx="50" cy="50" r="44"/><path d="M45 30h10v25a5 5 0 0 1-10 0V30Zm-9 20v5a14 14 0 0 0 28 0v-5M50 69v10m-8 0h16"/></svg></span><button type="button" class="button" id="radio-play">Try the interaction <span aria-hidden="true">▶</span></button><p>Visual preview · sound off</p></div>
+        </div>
+        <div class="radio-steps" role="group" aria-label="Walkthrough steps"><button type="button" data-radio-step="0" aria-pressed="true"><span>01</span> Hold PTT</button><button type="button" data-radio-step="1" aria-pressed="false"><span>02</span> Ask your question</button><button type="button" data-radio-step="2" aria-pressed="false"><span>03</span> Add the context</button><button type="button" data-radio-step="3" aria-pressed="false"><span>04</span> Hear the answer</button></div>
+      </div>
+    </div></section>
     <section class="section features-section" id="features"><div class="container">
       <div class="section-top"><div><p class="eyebrow">01 / A LITTLE LESS WORKLOAD</p><h2>Less heads-down.<br>More <span class="muted-word">flying.</span></h2></div><p class="section-lead">Learning a complex aircraft takes time.<br>Your copilot keeps useful answers close, so you can stay with the flight.</p></div>
       <div class="feature-grid">
@@ -127,6 +149,8 @@ cd dcs-copilote
     <section class="community-section"><div class="container community-inner"><div><p class="eyebrow">THE NEXT WAYPOINT</p><h2>Make a good wingman better.</h2><p>Found a bug? Have an idea? Help shape the next version on GitHub.</p></div><a class="button button-outline" href="https://github.com/Limoniak/dcs-copilote">Explore the project <span aria-hidden="true">↗</span></a></div></section>
   </main>
   <footer class="site-footer"><div class="container"><div class="footer-main"><a class="brand" href="#top"><img src="assets/marque.svg" width="36" height="36" alt=""><span>DCS <strong>Copilote</strong></span></a><p>A voice beside you. You’re still the pilot.</p><nav aria-label="Footer navigation"><a href="https://github.com/Limoniak/dcs-copilote">Source</a><a href="https://github.com/Limoniak/dcs-copilote/releases">Releases</a><a href="https://github.com/Limoniak/dcs-copilote/blob/main/ROADMAP.md">Roadmap</a></nav></div><div class="footer-bottom"><small>An independent community project. Not affiliated with Eagle Dynamics.</small><a href="#top">BACK TO TOP <span aria-hidden="true">↑</span></a></div></div></footer>
+  <nav class="chapter-nav" aria-label="Page chapters"><a href="#top" aria-label="Introduction" data-chapter="top"><span>INTRO</span><i></i></a><a href="#experience" aria-label="Interactive walkthrough" data-chapter="experience"><span>ON FREQUENCY</span><i></i></a><a href="#features" aria-label="Features" data-chapter="features"><span>YOUR WINGMAN</span><i></i></a><a href="#screenshots" aria-label="Application screenshots" data-chapter="screenshots"><span>INSIDE THE APP</span><i></i></a><a href="#download" aria-label="Download" data-chapter="download"><span>TAKE FLIGHT</span><i></i></a></nav>
+  <button type="button" id="motion-toggle" class="motion-toggle" aria-pressed="true" hidden><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Motion on</span></button>
   <dialog id="screenshot-dialog" aria-label="Expanded application screenshot"><div class="dialog-toolbar"><p id="dialog-caption"></p><button type="button" id="close-dialog" aria-label="Close screenshot">Close <span aria-hidden="true">×</span></button></div><img id="dialog-image" src="assets/screenshots/overlay.png" alt=""></dialog>
 </body>
 </html>
