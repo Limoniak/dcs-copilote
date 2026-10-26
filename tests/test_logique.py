@@ -242,6 +242,39 @@ def test_guides_gardes_si_dcs_introuvable(tmp_path, monkeypatch):
     assert app.App.chucks_selection(fake) == ["f-16cm", "fa-18c"]              # DCS là : le Mirage n'y est plus
 
 
+def test_guides_reessayes_vite_si_l_indexation_est_occupee(monkeypatch):
+    import threading
+
+    from dcs_copilote import app, chucks
+    monkeypatch.setattr(chucks, "load_state", lambda: {"last_check": 0})
+    sleeps = []
+
+    class Stop(Exception):
+        pass
+
+    def fake_sleep(s):
+        sleeps.append(s)
+        if len(sleeps) == 2:
+            raise Stop
+    monkeypatch.setattr(app.time, "sleep", fake_sleep)
+    updates = []
+    fake = types.SimpleNamespace(cfg={"manuals": {"chucks": {"enabled": True}}}, _chucks_lock=threading.Lock(),
+                                 update_chucks=lambda background: updates.append(1))
+    fake._chucks_lock.acquire()                       # indexation des manuels officiels en cours
+    try:
+        app.App._chucks_loop(fake)
+    except Stop:
+        pass
+    assert sleeps == [20, 300] and updates == []      # nouvel essai dans 5 min, pas dans 6 h
+    fake._chucks_lock.release()
+    sleeps.clear()
+    try:
+        app.App._chucks_loop(fake)
+    except Stop:
+        pass
+    assert updates == [1] and sleeps == [20, 6 * 3600]
+
+
 # ------------------------------------------------------------------ voix, checklist
 def test_decoupage_des_phrases_pour_la_voix():
     s = SentenceSplitter()

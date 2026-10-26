@@ -507,12 +507,18 @@ class App:
         from . import chucks
         time.sleep(20)                         # laisser l'appli démarrer tranquillement
         while True:
+            wait = 6 * 3600
             try:
                 if self.cfg["manuals"].get("chucks", {}).get("enabled") and chucks.due(chucks.load_state()):
-                    self.update_chucks(background=True)
+                    if self._chucks_lock.locked():
+                        # 1er lancement : les manuels officiels sont en cours d'indexation ; sans ce nouvel essai,
+                        # les guides des modules installés n'arrivaient que 6 h plus tard
+                        wait = 300
+                    else:
+                        self.update_chucks(background=True)
             except Exception as e:  # noqa: BLE001
                 print(f"[chucks] {e}", flush=True)
-            time.sleep(6 * 3600)
+            time.sleep(wait)
 
     def update_chucks(self, progress=lambda msg, frac=None: None, background=False, cfg=None):
         """Télécharge les guides nouveaux ou modifiés puis réindexe. En arrière-plan, l'analyse
