@@ -124,6 +124,16 @@ def play_test_phrase(tts_cfg, llm_cfg, out, text=TEST_PHRASE):
     return " ".join(notes)
 
 
+def _version():
+    """« v1.1.0 » pour l'appli installée, « dév » lancée depuis les sources (court : sous le titre des réglages)."""
+    try:
+        import velopack
+        from .app import REPO_URL
+        return "v" + velopack.UpdateManager(velopack.GithubSource(REPO_URL)).get_current_version()
+    except Exception:  # noqa: BLE001
+        return "dév"
+
+
 def _label(text, muted=False, h1=False, h2=False, wrap=False):
     lbl = QLabel(_links(text))
     lbl.setOpenExternalLinks(True)
@@ -330,7 +340,7 @@ class SettingsWindow(QWidget):
         t = _label("DCS Copilote")
         t.setStyleSheet("font-weight: 700; font-size: 11pt;")
         titles.addWidget(t)
-        titles.addWidget(_label("Réglages", muted=True))
+        titles.addWidget(_label(f"Réglages · {_version()}", muted=True))
         brand.addLayout(titles, 1)
         sl.addLayout(brand)
         sl.addSpacing(18)
@@ -360,6 +370,12 @@ class SettingsWindow(QWidget):
         logb.setIcon(icon("folder", MUTED, 16))
         logb.setToolTip("Fichier logs/dcs-copilote.log : à joindre si tu signales un problème")
         logb.clicked.connect(self._open_log)
+        updb = QPushButton("  Vérifier les mises à jour")
+        updb.setObjectName("nav")
+        updb.setIcon(icon("refresh", MUTED, 16))
+        updb.clicked.connect(lambda: (self.msg("Recherche d'une nouvelle version…"),
+                                      self._bg(lambda: self.app._check_update(report=self._update_result), lambda r: None)))
+        sl.addWidget(updb)
         histb = QPushButton("  Historique des questions")
         histb.setObjectName("nav")
         histb.setIcon(icon("book", MUTED, 16))
@@ -426,6 +442,9 @@ class SettingsWindow(QWidget):
             self.msg(missing, error=True)
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(path)))
+
+    def _update_result(self, text):
+        self.call(lambda: self.msg(text))
 
     def _open_log(self):
         from .logfile import LOG_PATH

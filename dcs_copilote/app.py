@@ -342,17 +342,22 @@ class App:
                 self.overlay.info("DCS tourne depuis 10 min sans m'envoyer de données. Normal au menu ; en "
                                   "mission, vérifie le dossier dans ⚙ Réglages → DCS et réinstalle le script.")
 
-    def _check_update(self):
-        """Appli installée (Velopack) : nouvelle version sur GitHub → proposer de l'installer et redémarrer."""
+    def _check_update(self, report=lambda msg: None):
+        """Appli installée (Velopack) : nouvelle version sur GitHub → proposer de l'installer et redémarrer.
+        report(message) : résultat pour le bouton « Vérifier les mises à jour » des réglages."""
         try:
             import velopack
             um = velopack.UpdateManager(velopack.GithubSource(REPO_URL))
-            info = um.check_for_updates()
-        except Exception as e:  # noqa: BLE001  (lancé depuis les sources : pas installé ; ou hors ligne)
+        except Exception as e:  # noqa: BLE001  (lancé depuis les sources : pas installé)
             print(f"[mise à jour] {e}", flush=True)
-            return
+            return report("Version de développement (lancée depuis les sources) : mise à jour avec git pull.")
+        try:
+            info = um.check_for_updates()
+        except Exception as e:  # noqa: BLE001  (hors ligne, GitHub injoignable)
+            print(f"[mise à jour] {e}", flush=True)
+            return report(f"Vérification impossible (pas d'Internet ?) : {e}")
         if not info:
-            return
+            return report(f"Tu as la dernière version ({um.get_current_version()}).")
         new = info.TargetFullRelease.Version
 
         def install():
@@ -365,6 +370,7 @@ class App:
         self._ask(f"Nouvelle version {new} disponible (tu as {um.get_current_version()}).\n\nL'installer maintenant ? "
                   "L'appli redémarre ; tes réglages, ton historique et tes manuels sont conservés.",
                   install, yes="Installer", no="Plus tard")
+        report(f"Nouvelle version {new} disponible.")
 
     # ------------------------------------------------------------------ utilitaires
     def log(self, msg, error=False):

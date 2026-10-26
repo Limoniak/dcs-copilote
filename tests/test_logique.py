@@ -133,6 +133,32 @@ def test_modele_muet_passe_au_secours(monkeypatch):
         assert e.kind == "timeout" and waits[-1] == 120        # sans secours : erreur claire, délai des réglages
 
 
+def test_verification_des_mises_a_jour(monkeypatch):
+    import sys
+
+    from dcs_copilote import app
+    newer = types.SimpleNamespace(TargetFullRelease=types.SimpleNamespace(Version="1.2.0"))
+
+    class Manager:
+        def __init__(self, source):
+            if state["installed"] is False:
+                raise RuntimeError("This application is not properly installed")
+
+        def get_current_version(self):
+            return "1.1.0"
+
+        def check_for_updates(self):
+            return state["update"]
+    monkeypatch.setitem(sys.modules, "velopack", types.SimpleNamespace(UpdateManager=Manager, GithubSource=str))
+    asked, said = [], []
+    fake = types.SimpleNamespace(_ask=lambda text, *a, **k: asked.append(text))
+    for state in ({"installed": False, "update": None}, {"installed": True, "update": None},
+                  {"installed": True, "update": newer}):
+        app.App._check_update(fake, report=said.append)
+    assert "développement" in said[0] and said[1] == "Tu as la dernière version (1.1.0)."
+    assert said[2] == "Nouvelle version 1.2.0 disponible." and "1.2.0" in asked[0] and "1.1.0" in asked[0]
+
+
 def test_indicatif_place_par_l_appli():
     on = system_prompt("F/A-18C Hornet", None, "vol", callsign="Viper 1", address=True)
     off = system_prompt("F/A-18C Hornet", None, "vol", callsign="Viper 1", address=False)
