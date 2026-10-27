@@ -1,5 +1,6 @@
 """Le script DCS (dcs/DCSAssistant.lua) exécuté dans Lua 5.1, comme dans DCS, avec un DCS simulé."""
 import json
+import locale
 import os
 
 import pytest
@@ -33,6 +34,15 @@ LoGetAccelerationUnits = function() error("bloqué par le serveur") end
 LoGetEngineInfo = function() return { fuel_internal = 2900 } end
 LoGetMechInfo = function() return { gear = { value = 1 }, flaps = { value = 0.5 } } end
 """
+
+
+@pytest.fixture(autouse=True)
+def _nombres_comme_dans_dcs():
+    """Points décimaux comme dans DCS : Qt applique la locale du système (fr_FR → « 77,2 » et JSON invalide)."""
+    old = locale.setlocale(locale.LC_NUMERIC)
+    locale.setlocale(locale.LC_NUMERIC, "C")
+    yield
+    locale.setlocale(locale.LC_NUMERIC, old)
 
 
 def run(setup=FAKE_DCS):
